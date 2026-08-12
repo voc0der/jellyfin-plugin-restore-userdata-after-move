@@ -64,7 +64,7 @@
       <PluginManifestLine Include="  &quot;name&quot;: &quot;Restore User Data After Move&quot;," />
       <PluginManifestLine Include="  &quot;overview&quot;: &quot;Recovers user data Jellyfin stranded when media paths changed.&quot;," />
       <PluginManifestLine Include="  &quot;description&quot;: &quot;Analysis-only build. Finds UserData rows detached by a path change and reports which current item each stranded snapshot belongs to. Contains no task that can modify user data.&quot;," />
-      <PluginManifestLine Include="  &quot;owner&quot;: &quot;coldarr&quot;," />
+      <PluginManifestLine Include="  &quot;owner&quot;: &quot;$(Authors)&quot;," />
       <PluginManifestLine Include="  &quot;category&quot;: &quot;General&quot;," />
       <PluginManifestLine Include="  &quot;version&quot;: &quot;$(PluginVersion)&quot;," />
       <PluginManifestLine Include="  &quot;targetAbi&quot;: &quot;$(JellyfinTargetAbi)&quot;," />
