@@ -9,6 +9,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.0.2",
+        "changelog": "## What's Changed\n\n- Take the plugin manifest owner from the same property as the assembly (916318e)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.1...1.0.0.2\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.2/RestoreUserDataAfterMove_1.0.0.2_jellyfin-10.11.11.zip",
+        "checksum": "148f865dca256ff43c13d27272dd0e4f",
+        "timestamp": "2026-08-12T19:39:30Z"
+      },
+      {
         "version": "1.0.0.1",
         "changelog": "## What's Changed\n\n- Add analyzer-only alpha for stranded Jellyfin user data (6ab3667)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.0...1.0.0.1\n",
         "targetAbi": "10.11.11.0",
