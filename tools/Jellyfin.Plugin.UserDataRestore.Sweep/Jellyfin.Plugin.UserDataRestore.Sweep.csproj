@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Parameter sweep over the analyzer (PLAN §2, go/no-go). Not shipped: it
+       exists to map how recovery responds to library shape, so a real
+       installation can locate itself on the curve by measuring one or two things
+       about itself rather than publishing its plan. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.UserDataRestore.Sweep</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Jellyfin.Plugin.UserDataRestore.Core/Jellyfin.Plugin.UserDataRestore.Core.csproj" />
+  </ItemGroup>
+
+</Project>
