@@ -9,6 +9,15 @@ on:
 permissions:
   contents: write
 
+# One release at a time. Two pushes landing together each derive their version
+# from the same latest tag, and `gh release create` tags whatever main points at
+# when it runs rather than the commit that was built - which shipped a 1.0.0.4
+# whose archives predated the tag they were attached to. Queued, not cancelled:
+# every commit on main still gets its own release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -137,7 +146,21 @@ jobs:
         git config user.email "contact@netspace.in"
         git add manifest.json
         git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
-        git push || echo "No changes to push"
+
+        # A swallowed push failure is how 1.0.0.4 ended up released but absent
+        # from the catalogue. Rebase onto whatever landed meanwhile and retry;
+        # if it still will not go, fail the job rather than report success.
+        for attempt in 1 2 3; do
+          if git push; then
+            exit 0
+          fi
+          echo "push rejected (attempt $attempt), rebasing onto origin/main"
+          git fetch origin main
+          git rebase origin/main || exit 1
+        done
+
+        echo "::error::Could not push the manifest update after 3 attempts"
+        exit 1
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -160,7 +183,11 @@ jobs:
           echo "the wrong one, so pick the archive matching your exact server."
         } > RELEASE_NOTES.md
 
+        # --target pins the tag to the commit these artifacts were built from.
+        # Without it the tag lands on main's current tip, which is not the same
+        # thing once a second merge is in flight.
         gh release create "$VERSION" \
           --title "Release $VERSION" \
           --notes-file RELEASE_NOTES.md \
+          --target "${{ github.sha }}" \
           artifacts/*.zip
