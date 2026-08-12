@@ -161,10 +161,31 @@ results from disposable servers and consenting real backups. A high ambiguity or
 no-match rate is a legitimate result that ends the project at this milestone —
 it is not a signal to add fallback matching.
 
-**This is the open work.** A synthetic two-user, one-title server answers nothing
-about the question; it only shows the analyzer classifies that case correctly. The
-numbers that matter come from installations with real history, where the ratio of
-`ready` to `no_current_key_match` and `ambiguous_current_key` is unknown.
+**This is the open work**, but it is now a smaller question than it was.
+[`evidence/sweep/`](evidence/sweep/) maps how recovery responds to library shape,
+and the answer is dominated by one term:
+
+```
+recovery ≈ imdbCoverage × (1 − duplication) × (1 − alreadyHasState)
+```
+
+validated to within two points on held-out configurations. So the ask of a real
+installation is no longer "send classification results" but *"what fraction of
+your movies and series carry an IMDb ID"* — one number, measurable without running
+anything. Two findings from the sweep bear directly on this review:
+
+- **A TMDb-only library recovers nothing at any coverage**, and no fallback fixes
+  that: a bare number is not identity evidence, and an episode never has a second
+  provider key to corroborate with. Those installations are out of scope by
+  design, not by omission.
+- **Row-level ratios are misleading.** Dead GUID rows accumulate linearly with
+  move count while contributing nothing, so `no_current_key_match` grows without
+  recovery falling at all. Judge on opportunities — `(user, title)` pairs that had
+  stranded state — not on rows.
+
+Real summaries are still worth collecting, but as a check on the sweep's
+assumptions about duplication and pre-existing state rather than as the primary
+evidence.
 
 Ask each reviewer for the `summary` block of their plan — counts, no titles, no
 user IDs. Alongside the ratio itself, three diagnostics decide follow-up work:
