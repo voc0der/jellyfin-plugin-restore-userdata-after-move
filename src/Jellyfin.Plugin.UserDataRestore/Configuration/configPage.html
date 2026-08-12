@@ -5,116 +5,95 @@
 </head>
 <body>
 <div id="userDataRestoreConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
-     data-require="emby-input,emby-button,emby-checkbox,emby-select">
+     data-require="emby-input,emby-button,emby-checkbox,emby-collapse">
     <div data-role="content">
         <div class="content-primary">
 
             <div class="verticalSection">
                 <h2 class="sectionTitle">Restore User Data After Move</h2>
-                <p>
-                    When a file's path changes, Jellyfin replaces the item and leaves the old item's
-                    played state, resume position, favourite and rating behind as unreachable rows.
-                    This plugin finds those rows and works out which current item each one belongs to.
-                </p>
-                <p class="fieldDescription" style="margin-top:1em;">
-                    <strong>This build analyses only.</strong> It contains no task that can change
-                    Jellyfin user data. It writes a plan file you can review; nothing consumes it.
+                <p class="fieldDescription">
+                    Finds watch history Jellyfin lost when your files moved, and reports what it can
+                    put back. This version only reports &mdash; it cannot change anything.
                 </p>
             </div>
 
-            <form id="userDataRestoreConfigForm">
-
-                <div class="verticalSection">
-                    <h3 class="sectionTitle">Eligible libraries</h3>
-                    <div class="fieldDescription">
-                        Only items in these libraries can be recovery targets. Nothing is analysed
-                        until at least one is selected.
-                    </div>
-                    <div id="libraryList" style="margin-top:1em;"></div>
+            <div class="verticalSection">
+                <button is="emby-button" type="button" id="runAnalysis" class="raised button-submit block">
+                    <span>Run analysis</span>
+                </button>
+                <div class="fieldDescription" id="runStatus" style="margin-top:0.6em;">
+                    Uses every movie and TV library.
                 </div>
+            </div>
 
+            <form id="userDataRestoreConfigForm">
                 <div class="verticalSection">
-                    <h3 class="sectionTitle">Final path prefixes</h3>
-                    <div class="inputContainer">
-                        <textarea is="emby-textarea" id="finalPathPrefixes" rows="4" class="emby-input"
-                                  placeholder="/data/library/movies&#10;/data/library/tv"></textarea>
-                        <div class="fieldDescription">
-                            One absolute path per line. A target must sit beneath one of these to be
-                            recovered. Comparison is path-component aware, so
-                            <code>/data/library/tv2</code> is not beneath <code>/data/library/tv</code>.
+                    <div is="emby-collapse" title="Advanced">
+                        <div class="collapseContent">
+
+                            <div style="margin-top:0.5em;">
+                                <div class="fieldDescription">Libraries to recover into. None ticked means all of them.</div>
+                                <div id="libraryList" style="margin-top:0.6em;"></div>
+                            </div>
+
+                            <div class="inputContainer" style="margin-top:1.5em;">
+                                <label class="inputLabel inputLabelUnfocused" for="finalPathPrefixes">Limit to these folders</label>
+                                <textarea is="emby-textarea" id="finalPathPrefixes" rows="3" class="emby-input"></textarea>
+                                <div class="fieldDescription">
+                                    One per line, as the server sees them. Empty means the libraries' own folders.
+                                </div>
+                            </div>
+
+                            <label class="emby-checkbox-label" style="margin-top:1.5em;">
+                                <input is="emby-checkbox" type="checkbox" id="requirePathExists" />
+                                <span>Skip items whose media file is missing</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">
+                                Avoids recovering onto leftovers from an unfinished scan.
+                            </div>
+
+                            <label class="emby-checkbox-label" style="margin-top:1em;">
+                                <input is="emby-checkbox" type="checkbox" id="verboseLogging" />
+                                <span>Log every row to the server log</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">
+                                Includes titles and user IDs.
+                            </div>
+
+                            <button is="emby-button" type="submit" class="raised block" style="margin-top:1.5em;">
+                                <span>Save</span>
+                            </button>
+
                         </div>
                     </div>
                 </div>
-
-                <div class="verticalSection">
-                    <h3 class="sectionTitle">Options</h3>
-
-                    <label class="emby-checkbox-label">
-                        <input is="emby-checkbox" type="checkbox" id="requirePathExists" />
-                        <span>Require the target's media file to exist on disk</span>
-                    </label>
-                    <div class="fieldDescription checkboxFieldDescription">
-                        Turn this off only if the library lives on storage that is deliberately
-                        offline while you analyse.
-                    </div>
-
-                    <label class="emby-checkbox-label" style="margin-top:1em;">
-                        <input is="emby-checkbox" type="checkbox" id="verboseLogging" />
-                        <span>Log every classified row at debug level</span>
-                    </label>
-                    <div class="fieldDescription checkboxFieldDescription">
-                        The plan file always contains the full detail. This only adds it to the
-                        server log, which includes titles and user IDs.
-                    </div>
-
-                    <div class="inputContainer" style="margin-top:1em;">
-                        <label class="inputLabel inputLabelUnfocused" for="planRetentionCount">Plans to keep</label>
-                        <input is="emby-input" type="number" id="planRetentionCount" min="1" max="100" step="1" />
-                        <div class="fieldDescription">Older plan files are deleted after each run.</div>
-                    </div>
-                </div>
-
-                <div class="verticalSection">
-                    <button is="emby-button" type="submit" class="raised button-submit block">
-                        <span>Save</span>
-                    </button>
-                </div>
-
-                <div class="verticalSection">
-                    <h3 class="sectionTitle">Running the analysis</h3>
-                    <p class="fieldDescription">
-                        Finish moving your files and let Jellyfin complete a full scan first, so the
-                        old items are gone and the new ones exist. Then run
-                        <strong>Analyze detached user data</strong> from Dashboard &rarr; Scheduled Tasks.
-                        It has no schedule and never will; run it by hand.
-                    </p>
-                    <p class="fieldDescription">
-                        The task reports counts per outcome and writes a plan under the plugin's data
-                        folder. A high "no match" or "ambiguous" count is a real answer about your
-                        library, not a failure.
-                    </p>
-                </div>
-
             </form>
+
         </div>
     </div>
 
     <script type="text/javascript">
         (function () {
             var pluginId = '6b416775-6a90-436f-a034-796c52f5a317';
+            var taskKey = 'UserDataRestoreAnalyze';
             var page = document.querySelector('#userDataRestoreConfigPage');
 
             function renderLibraries(folders, selectedIds) {
                 var container = page.querySelector('#libraryList');
                 container.innerHTML = '';
 
-                if (!folders.length) {
-                    container.innerHTML = '<div class="fieldDescription">No libraries found.</div>';
+                // Only movie and TV libraries: nothing else can hold a recovery
+                // target, so offering them is offering a checkbox that does nothing.
+                var eligible = folders.filter(function (folder) {
+                    return folder.CollectionType === 'movies' || folder.CollectionType === 'tvshows';
+                });
+
+                if (!eligible.length) {
+                    container.innerHTML = '<div class="fieldDescription">No movie or TV libraries found.</div>';
                     return;
                 }
 
-                folders.forEach(function (folder) {
-                    var id = folder.ItemId;
+                eligible.forEach(function (folder) {
                     var label = document.createElement('label');
                     label.className = 'emby-checkbox-label';
 
@@ -122,18 +101,30 @@
                     input.setAttribute('is', 'emby-checkbox');
                     input.type = 'checkbox';
                     input.className = 'libraryCheckbox';
-                    input.setAttribute('data-libraryid', id);
+                    input.setAttribute('data-libraryid', folder.ItemId);
                     input.checked = selectedIds.some(function (selected) {
-                        return String(selected).toLowerCase() === String(id).toLowerCase();
+                        return String(selected).toLowerCase() === String(folder.ItemId).toLowerCase();
                     });
 
                     var span = document.createElement('span');
-                    span.textContent = folder.Name + ' (' + (folder.CollectionType || 'mixed') + ')';
+                    span.textContent = folder.Name;
 
                     label.appendChild(input);
                     label.appendChild(span);
                     container.appendChild(label);
                 });
+            }
+
+            function describeScope(config, folders) {
+                var chosen = (config.EligibleLibraryIds || []).length;
+                var paths = (config.FinalPathPrefixes || []).length;
+
+                if (chosen === 0 && paths === 0) {
+                    return 'Uses every movie and TV library.';
+                }
+
+                return 'Uses ' + (chosen === 0 ? 'every movie and TV library' : chosen + ' selected ' + (chosen === 1 ? 'library' : 'libraries'))
+                    + (paths === 0 ? '.' : ', limited to ' + paths + ' ' + (paths === 1 ? 'folder' : 'folders') + '.');
             }
 
             function load() {
@@ -150,7 +141,7 @@
                     page.querySelector('#finalPathPrefixes').value = (config.FinalPathPrefixes || []).join('\n');
                     page.querySelector('#requirePathExists').checked = config.RequirePathExists !== false;
                     page.querySelector('#verboseLogging').checked = config.VerboseLogging === true;
-                    page.querySelector('#planRetentionCount').value = config.PlanRetentionCount || 5;
+                    page.querySelector('#runStatus').textContent = describeScope(config, folders);
 
                     Dashboard.hideLoadingMsg();
                 });
@@ -172,9 +163,9 @@
 
                     config.RequirePathExists = page.querySelector('#requirePathExists').checked;
                     config.VerboseLogging = page.querySelector('#verboseLogging').checked;
-                    config.PlanRetentionCount = parseInt(page.querySelector('#planRetentionCount').value, 10) || 5;
 
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        page.querySelector('#runStatus').textContent = describeScope(config, []);
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
                 });
@@ -182,8 +173,38 @@
                 return false;
             }
 
+            // Starting the task from here is the whole point: a user should not have
+            // to be told to go find it under Scheduled Tasks.
+            function run() {
+                var status = page.querySelector('#runStatus');
+                status.textContent = 'Starting...';
+
+                ApiClient.getJSON(ApiClient.getUrl('ScheduledTasks')).then(function (tasks) {
+                    var task = (tasks || []).filter(function (candidate) {
+                        return candidate.Key === taskKey;
+                    })[0];
+
+                    if (!task) {
+                        status.textContent = 'Could not find the analysis task. Restart Jellyfin and try again.';
+                        return;
+                    }
+
+                    ApiClient.ajax({
+                        type: 'POST',
+                        url: ApiClient.getUrl('ScheduledTasks/Running/' + task.Id)
+                    }).then(function () {
+                        status.textContent = 'Running. Results appear in Dashboard → Scheduled Tasks, and in the plan file.';
+                    }, function () {
+                        status.textContent = 'Could not start the task.';
+                    });
+                }, function () {
+                    status.textContent = 'Could not reach the server.';
+                });
+            }
+
             page.addEventListener('pageshow', load);
             page.querySelector('#userDataRestoreConfigForm').addEventListener('submit', save);
+            page.querySelector('#runAnalysis').addEventListener('click', run);
         })();
     </script>
 </div>

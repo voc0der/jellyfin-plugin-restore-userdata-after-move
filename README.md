@@ -92,14 +92,16 @@ Building it yourself produces the same archives:
 
 ## Using it
 
-With the plugin installed, in the Jellyfin dashboard:
+Open the plugin's settings and click **Run analysis**. There is nothing to
+configure: it uses every movie and TV library, scoped to those libraries' own
+folders as the server reports them.
 
-1. Open the plugin's settings. Tick the libraries that may be recovery targets and
-   list your final media paths, one per line. The task refuses to run until both
-   are set — without them it has no idea what a correct answer looks like.
-2. Run **Analyze detached user data** from Scheduled Tasks.
-3. Read the summary in the task result and the log. The full plan is under
-   `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
+Results appear in the task's summary and the server log; the full detail is in a
+plan file under `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
+
+Under **Advanced** you can restrict it to particular libraries or folders. The
+only common reason to bother is a library spanning two roots where you moved
+everything into one of them and the other still holds the items you left behind.
 
 Do this after your file moves are finished and Jellyfin has completed a full
 scan. Run it mid-migration and the old items still linger alongside the new ones,

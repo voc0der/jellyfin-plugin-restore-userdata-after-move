@@ -161,6 +161,7 @@ public static class DetachedUserDataAnalyzer
             CurrentItemsInspected = input.CurrentItems.Count,
             EligibleTargetCount = index.EligibleItemCount,
             EligibleTargetsWithProviderKeys = index.EligibleItemsWithProviderKeyCount,
+            ExclusionCounts = index.ExclusionCounts,
             DistinctCurrentKeyCount = index.DistinctKeyCount,
             KnownUserCount = input.KnownUserIds.Count,
             UniqueMatchEvidenceCounts = evidenceCounts,
