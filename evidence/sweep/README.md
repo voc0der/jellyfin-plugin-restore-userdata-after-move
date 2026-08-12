@@ -15,7 +15,8 @@ Every point is **20 deterministic seeds**, ~2000 items each. Rates are pooled ov
 all 20 populations rather than averaged across per-seed rates, so every
 opportunity carries equal weight; the ranges are the per-seed extremes. Raw
 output: [`sweep.csv`](sweep.csv), which also records the **realized** mean series
-length for every point.
+length for every point. Every percentage in this document is transcribed from the
+program's own printed table, so rounding is applied once, in one place.
 
 ```sh
 dotnet run -c Release --project tools/Jellyfin.Plugin.UserDataRestore.Sweep -- evidence/sweep/sweep.csv
@@ -56,7 +57,7 @@ Two measures of coverage are reported:
 
 | nominal IMDb coverage | 0 | 0.2 | 0.4 | 0.6 | 0.8 | 0.9 | 1.0 |
 |---|---|---|---|---|---|---|---|
-| recovery (pooled) | 0.0% | 20.6% | 41.5% | 61.5% | 82.2% | 91.5% | 100% |
+| recovery (pooled) | 0.0% | 20.6% | 41.5% | 61.5% | 82.2% | 91.4% | 100% |
 | spread across seeds | — | 13.4–30.5% | 32.2–49.5% | 51.7–68.8% | 72.4–87.2% | 83.4–95.4% | — |
 
 The pooled rate tracks coverage exactly, which is arithmetic rather than
@@ -86,7 +87,7 @@ under-served.
 
 | titles duplicated | 0 | 0.05 | 0.1 | 0.2 | 0.35 | 0.5 |
 |---|---|---|---|---|---|---|
-| recovery | 91.4% | 86.9% | 82.1% | 73.1% | 59.6% | 45.8% |
+| recovery | 91.4% | 86.9% | 82.1% | 73.1% | 59.7% | 45.8% |
 
 | current items already holding state | 0 | 0.25 | 0.5 | 0.75 | 1.0 |
 |---|---|---|---|---|---|
@@ -100,7 +101,7 @@ these losses are invisible to any coverage measurement.
 
 | moves per title | 1 | 2 | 3 | 5 | 8 |
 |---|---|---|---|---|---|
-| recovery | 91.5% | 91.5% | 91.5% | 91.5% | 91.5% |
+| recovery | 91.4% | 91.4% | 91.4% | 91.4% | 91.4% |
 | dead GUID rows | 1,609 | 3,217 | 4,826 | 8,044 | 12,870 |
 
 Identical to four decimal places, while unmappable rows grow linearly. **Any
@@ -199,7 +200,8 @@ these curves move with it.
   recovered under §7.3 case 1. It put a 2% floor under zero-coverage libraries,
   pushed recovery to 101%, and made recovery appear to improve with move count.
   This never reached a published number — the first version drew those GUIDs from
-  `Random` and could not collide. An earlier draft of this section claimed the
+  `Random`, where a collision is possible only in the sense that any 128-bit
+  collision is, and none occurred. An earlier draft of this section claimed the
   published figures contained it; that was wrong, and the git history says so.
   There is now a test asserting no stranded GUID key matches a live item.
 - **Series lengths did not have the configured mean.** The sampler rounded a
