@@ -55,12 +55,14 @@ public sealed class CurrentKeyIndex
         Dictionary<string, List<CurrentItemSnapshot>> byKey,
         Dictionary<Guid, ItemExclusion> exclusions,
         int eligibleItemCount,
-        int eligibleItemsWithProviderKeyCount)
+        int eligibleItemsWithProviderKeyCount,
+        IReadOnlyDictionary<ItemExclusion, int> exclusionCounts)
     {
         _byKey = byKey;
         _exclusions = exclusions;
         EligibleItemCount = eligibleItemCount;
         EligibleItemsWithProviderKeyCount = eligibleItemsWithProviderKeyCount;
+        ExclusionCounts = exclusionCounts;
     }
 
     /// <summary>Gets the number of distinct keys in the index.</summary>
@@ -82,6 +84,17 @@ public sealed class CurrentKeyIndex
     public int EligibleItemsWithProviderKeyCount { get; }
 
     /// <summary>
+    /// Gets how many current items each exclusion reason accounted for.
+    /// </summary>
+    /// <remarks>
+    /// Without this, a missing mount looks exactly like an empty result: every
+    /// item fails the path-exists test, the eligible count collapses, the run
+    /// succeeds, and nothing says why. The reason was already computed per item
+    /// and thrown away — this keeps it.
+    /// </remarks>
+    public IReadOnlyDictionary<ItemExclusion, int> ExclusionCounts { get; }
+
+    /// <summary>
     /// Builds the index from the current catalog.
     /// </summary>
     /// <param name="items">Every current movie and episode known to the server.</param>
@@ -94,6 +107,7 @@ public sealed class CurrentKeyIndex
 
         var byKey = new Dictionary<string, List<CurrentItemSnapshot>>(StringComparer.Ordinal);
         var exclusions = new Dictionary<Guid, ItemExclusion>();
+        var exclusionCounts = new Dictionary<ItemExclusion, int>();
         var eligible = 0;
         var eligibleWithProviderKey = 0;
 
@@ -101,6 +115,7 @@ public sealed class CurrentKeyIndex
         {
             var exclusion = ItemEligibility.Evaluate(item, options);
             exclusions[item.ItemId] = exclusion;
+            exclusionCounts[exclusion] = exclusionCounts.GetValueOrDefault(exclusion) + 1;
             if (exclusion == ItemExclusion.None)
             {
                 eligible++;
@@ -131,7 +146,7 @@ public sealed class CurrentKeyIndex
             }
         }
 
-        return new CurrentKeyIndex(byKey, exclusions, eligible, eligibleWithProviderKey);
+        return new CurrentKeyIndex(byKey, exclusions, eligible, eligibleWithProviderKey, exclusionCounts);
     }
 
     private static bool IsOwnGuid(string key, Guid itemId) =>

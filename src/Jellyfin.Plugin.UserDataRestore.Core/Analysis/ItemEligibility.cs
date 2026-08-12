@@ -27,6 +27,34 @@ public enum ItemExclusion
 }
 
 /// <summary>
+/// Wire names for <see cref="ItemExclusion"/>, spelled out for the same reason
+/// <see cref="ReasonCodes"/> are: a rename in C# must not change the plan schema.
+/// </summary>
+public static class ItemExclusions
+{
+    private static readonly Dictionary<ItemExclusion, string> Names = new()
+    {
+        [ItemExclusion.None] = "eligible",
+        [ItemExclusion.UnsupportedType] = "unsupported_type",
+        [ItemExclusion.VirtualOrExtra] = "virtual_or_extra",
+        [ItemExclusion.MissingPath] = "missing_media_file",
+        [ItemExclusion.LibraryNotConfigured] = "library_not_configured",
+        [ItemExclusion.PathOutsideFinalScope] = "path_outside_final_scope",
+    };
+
+    /// <summary>Gets every exclusion reason.</summary>
+    public static IReadOnlyList<ItemExclusion> All { get; } = [.. Names.Keys];
+
+    /// <summary>
+    /// Maps an exclusion to its stable wire name.
+    /// </summary>
+    /// <param name="exclusion">The exclusion to map.</param>
+    /// <returns>The snake_case name used in plans and logs.</returns>
+    public static string ToWire(ItemExclusion exclusion) =>
+        Names.TryGetValue(exclusion, out var name) ? name : throw new ArgumentOutOfRangeException(nameof(exclusion));
+}
+
+/// <summary>
 /// Decides which current items may receive recovered state (DESIGN §7.2).
 /// </summary>
 public static class ItemEligibility

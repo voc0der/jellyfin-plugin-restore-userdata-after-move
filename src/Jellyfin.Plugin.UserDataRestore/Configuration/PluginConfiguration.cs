@@ -13,7 +13,8 @@ namespace Jellyfin.Plugin.UserDataRestore.Configuration;
 public class PluginConfiguration : BasePluginConfiguration
 {
     /// <summary>
-    /// Gets or sets the libraries whose items may receive recovered state.
+    /// Gets or sets the libraries whose items may receive recovered state. Empty
+    /// means every movie and TV library on the server.
     /// </summary>
     /// <remarks>
     /// Stored as strings because that is what the configuration page posts back.
@@ -23,20 +24,17 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets the final path prefixes a recovery target must sit beneath.
+    /// Empty means the in-scope libraries' own locations, which is what the server
+    /// already knows and what nearly everyone wants.
     /// </summary>
     public string[] FinalPathPrefixes { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets a value indicating whether a target's media path must exist
-    /// on disk. Leave this on unless the library lives on storage that is
-    /// deliberately offline during analysis.
+    /// Gets or sets a value indicating whether items whose media file is missing
+    /// are skipped. On by default: a missing file usually means a leftover item
+    /// from an unfinished scan, and recovering onto one re-strands the data.
     /// </summary>
     public bool RequirePathExists { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets how many plan files to keep (DESIGN §8).
-    /// </summary>
-    public int PlanRetentionCount { get; set; } = 5;
 
     /// <summary>
     /// Gets or sets a value indicating whether every classified row is logged at

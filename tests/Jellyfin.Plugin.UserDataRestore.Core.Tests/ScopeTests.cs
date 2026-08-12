@@ -103,4 +103,55 @@ public class ScopeTests
         Assert.False(unconfigured.IsScopeConfigured);
         Assert.Equal(ItemExclusion.LibraryNotConfigured, ItemEligibility.Evaluate(Scenario.Movie(MovieId), unconfigured));
     }
+
+    [Fact]
+    public void TypedFoldersWinOverTheLibrariesOwnLocations()
+    {
+        var resolved = ScopeDefaults.ResolvePrefixes(["/data/only-here"], ["/data/library/movies", "/data/library/tv"]);
+
+        Assert.Equal(["/data/only-here"], resolved);
+    }
+
+    [Fact]
+    public void NoTypedFoldersMeansTheLibrariesOwnLocations()
+    {
+        // The whole point of the default: the server already knows these, and a
+        // hand-typed host path that the server sees as a container path silently
+        // excludes everything.
+        var resolved = ScopeDefaults.ResolvePrefixes([], ["/data/library/tv", "/data/library/movies"]);
+
+        Assert.Equal(["/data/library/movies", "/data/library/tv"], resolved);
+    }
+
+    [Fact]
+    public void ResolvedFoldersAreTrimmedDeduplicatedAndOrdered()
+    {
+        // A configured location can arrive with a trailing separator, and the
+        // prefix test is component-aware: "/data/tv/" would match nothing.
+        var resolved = ScopeDefaults.ResolvePrefixes(null, ["/data/tv/", "  /data/tv  ", "/data/movies"]);
+
+        Assert.Equal(["/data/movies", "/data/tv"], resolved);
+    }
+
+    [Fact]
+    public void AServerWithNothingConfiguredResolvesToNoScope()
+    {
+        Assert.Empty(ScopeDefaults.ResolvePrefixes([], []));
+        Assert.False(new AnalysisOptions { EligibleLibraryIds = [Scenario.LibraryId] }.IsScopeConfigured);
+    }
+
+    [Fact]
+    public void ItemsDroppedForAMissingFileAreCounted()
+    {
+        // Without this count, an unmounted share and an empty library produce the
+        // same output: zero eligible targets and a successful run.
+        var present = Scenario.Movie(MovieId);
+        var missing = Scenario.Movie(Guid.NewGuid(), imdb: "tt7654321", tmdb: "604") with { PathExists = false };
+
+        var index = CurrentKeyIndex.Build([present, missing], Scenario.Options(requirePathExists: true));
+
+        Assert.Equal(1, index.EligibleItemCount);
+        Assert.Equal(1, index.ExclusionCounts[ItemExclusion.MissingPath]);
+        Assert.Equal(1, index.ExclusionCounts[ItemExclusion.None]);
+    }
 }

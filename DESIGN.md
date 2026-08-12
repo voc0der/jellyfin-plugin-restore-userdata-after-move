@@ -291,24 +291,40 @@ enforcement observed during the same probe.
 
 ### 6.1 Persistent configuration
 
-- Eligible Jellyfin library IDs.
-- Required final path prefixes, such as `/data/library/movies` and
-  `/data/library/tv`.
-- Plan/report retention limits.
-- Optional maximum number of writes allowed in one run.
+- Eligible Jellyfin library IDs.  **Empty means every movie and TV library**, and
+  no other kind is ever offered or defaulted to: nothing in a music, photo, or
+  book library can hold a recovery target.
+- Final path prefixes.  **Empty means the in-scope libraries' own configured
+  locations**, read from the server.
+- Whether items whose media file is missing are skipped.  On by default.
 
-Apply is disabled unless both library IDs and path prefixes are configured.
-Paths are compared using Jellyfin's host-platform path semantics.  Prefix tests
-must be path-component-aware; `/data/library/tv2` is not beneath
-`/data/library/tv`.
+Both scope fields default rather than being required.  Requiring them guaranteed
+that the first run of a fresh install failed, and the path field asked the
+operator to retype something the server already knows — in a form that is easy to
+get wrong and whose failure is silent.  A host path entered where the server sees
+a container path excludes every item and reports "nothing recoverable", which is
+indistinguishable from a correct empty result.  Both remain editable for the case
+that motivated them: a library spanning two roots where only one is the
+destination.
+
+Whatever the scope resolves to is what the plan records, so an audit reads the
+same whether it was typed or derived.  Paths are compared using Jellyfin's
+host-platform path semantics.  Prefix tests must be path-component-aware;
+`/data/library/tv2` is not beneath `/data/library/tv`.
+
+Plan retention is not configurable.  It is housekeeping over small files, and a
+plugin page should not ask a question its reader has no basis to answer.  The
+apply-side settings (arming, backup acknowledgement, write caps) arrive with the
+apply task in Milestone 3.
 
 ### 6.2 Operator sequence
 
 1. Finish the stable-tree cutover and complete the final Jellyfin scan.
 2. Confirm playback works from the final paths.
 3. Install the plugin build matching the exact server version.
-4. Configure eligible libraries and final path prefixes.
-5. Run **Analyze detached user data**.
+4. Narrow the scope on the plugin page, if and only if the defaults are wrong.
+5. Run **Analyze detached user data**, from the plugin page or from Scheduled
+   Tasks.
 6. Review the summary and JSON plan, especially ambiguity and conflict counts.
 7. Take a current Jellyfin full-system backup.
 8. Enter the displayed confirmation phrase, containing the plan ID and write

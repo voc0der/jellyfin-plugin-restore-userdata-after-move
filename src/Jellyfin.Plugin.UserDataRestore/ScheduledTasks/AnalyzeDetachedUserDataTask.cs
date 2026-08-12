@@ -28,6 +28,10 @@ namespace Jellyfin.Plugin.UserDataRestore.ScheduledTasks;
 /// </remarks>
 public class AnalyzeDetachedUserDataTask : IScheduledTask
 {
+    // Housekeeping, not a preference. Plans are small, five is plenty of history
+    // to compare against, and nobody opening a plugin page has an opinion about it.
+    private const int PlansKept = 5;
+
     private readonly IDbContextFactory<JellyfinDbContext> _dbFactory;
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -87,13 +91,23 @@ public class AnalyzeDetachedUserDataTask : IScheduledTask
         var plugin = Plugin.Instance
             ?? throw new InvalidOperationException("The plugin instance is not available.");
         var configuration = plugin.Configuration;
-        var options = BuildOptions(configuration);
+        var scope = new LibraryScope(_libraryManager).Resolve(configuration.EligibleLibraryIds);
+        var options = BuildOptions(configuration, scope);
 
         if (!options.IsScopeConfigured)
         {
             throw new InvalidOperationException(
-                "Configure at least one eligible library and one final path prefix on the plugin's configuration page before running this task.");
+                scope.LibraryIds.Count == 0
+                    ? "No movie or TV libraries were found on this server, so there is nothing this plugin can recover into."
+                    : "The selected libraries have no configured folders, so no recovery target can be identified.");
         }
+
+        _logger.LogInformation(
+            "Scope: {LibraryCount} {Source} libraries, {PrefixCount} folders ({Prefixes}).",
+            scope.LibraryIds.Count,
+            scope.Defaulted ? "auto-detected" : "selected",
+            options.FinalPathPrefixes.Count,
+            string.Join(", ", options.FinalPathPrefixes));
 
         var reader = new UserDataReader(_dbFactory);
         var collector = new LibraryItemCollector(_libraryManager);
@@ -160,7 +174,7 @@ public class AnalyzeDetachedUserDataTask : IScheduledTask
 
         var store = new PlanStore(plugin.PlanDirectory);
         var planPath = store.Write(plan);
-        store.PruneToLatest(configuration.PlanRetentionCount);
+        store.PruneToLatest(PlansKept);
         progress.Report(95);
 
         ReportReadOnlyProof(fingerprintBefore, fingerprintAfter);
@@ -169,13 +183,13 @@ public class AnalyzeDetachedUserDataTask : IScheduledTask
         progress.Report(100);
     }
 
-    private static AnalysisOptions BuildOptions(PluginConfiguration configuration) => new()
+    private static AnalysisOptions BuildOptions(PluginConfiguration configuration, ResolvedLibraryScope scope) => new()
     {
-        EligibleLibraryIds = [.. configuration.EligibleLibraryIds
-            .Select(id => Guid.TryParse(id, out var parsed) ? parsed : Guid.Empty)
-            .Where(id => !id.Equals(Guid.Empty))],
-        FinalPathPrefixes = [.. configuration.FinalPathPrefixes
-            .Where(prefix => !string.IsNullOrWhiteSpace(prefix))],
+        EligibleLibraryIds = scope.LibraryIds,
+
+        // Typed prefixes win; otherwise the libraries' own locations, which the
+        // server already knows and a human cannot mistype.
+        FinalPathPrefixes = ScopeDefaults.ResolvePrefixes(configuration.FinalPathPrefixes, scope.Locations),
 
         // Jellyfin runs on the host's own filesystem semantics; comparing paths
         // case-sensitively on Windows would reject valid targets.
@@ -228,6 +242,19 @@ public class AnalyzeDetachedUserDataTask : IScheduledTask
             _logger.LogWarning(
                 "None of the {Count} eligible items reports a key other than its own GUID, so only an exact old-item GUID could ever match. "
                 + "Either these libraries carry no provider IDs, or their metadata is not loaded. Check that the items show IMDb/TMDb IDs in the Jellyfin UI.",
+                result.Diagnostics.EligibleTargetCount);
+        }
+
+        // A mount that is not there looks exactly like a library with nothing to
+        // recover: every item fails the file check, the eligible count collapses,
+        // and the run succeeds. Say which it was.
+        var missingFiles = result.Diagnostics.ExclusionCounts.GetValueOrDefault(ItemExclusion.MissingPath);
+        if (missingFiles > 0 && missingFiles >= result.Diagnostics.EligibleTargetCount)
+        {
+            _logger.LogWarning(
+                "{Count} items were skipped because their media file was not found, which is more than the {Eligible} that qualified. "
+                + "If those files should be there, a mount is probably missing — fix that before trusting this run.",
+                missingFiles,
                 result.Diagnostics.EligibleTargetCount);
         }
 

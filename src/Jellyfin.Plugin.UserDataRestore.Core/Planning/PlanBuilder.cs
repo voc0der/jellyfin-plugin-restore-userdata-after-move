@@ -116,6 +116,14 @@ public static class PlanBuilder
             diagnostics["uniqueMatchEvidence." + KeyEvidenceNames.ToWire(evidence)] = count;
         }
 
+        // Every reason, including the zeroes: "no items were dropped for a missing
+        // file" is itself the answer to the question this block exists to raise.
+        foreach (var exclusion in ItemExclusions.All)
+        {
+            diagnostics["items." + ItemExclusions.ToWire(exclusion)] =
+                result.Diagnostics.ExclusionCounts.GetValueOrDefault(exclusion);
+        }
+
         return new PlanSummary
         {
             RowCounts = ToWireCounts(result.RowCounts),

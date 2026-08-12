@@ -116,6 +116,18 @@ public sealed record AnalysisDiagnostics
     /// </remarks>
     public int EligibleTargetsWithProviderKeys { get; init; }
 
+    /// <summary>
+    /// Gets how many current items each exclusion reason accounted for.
+    /// </summary>
+    /// <remarks>
+    /// A run where most items were dropped for a missing media file is almost
+    /// never a library with missing files; it is a mount that is not there. That
+    /// is indistinguishable from "nothing to recover" unless the reason is
+    /// reported, which is what this is for.
+    /// </remarks>
+    public IReadOnlyDictionary<ItemExclusion, int> ExclusionCounts { get; init; } =
+        new Dictionary<ItemExclusion, int>();
+
     /// <summary>Gets the number of distinct keys in the reverse index.</summary>
     public int DistinctCurrentKeyCount { get; init; }
 
