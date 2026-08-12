@@ -37,8 +37,8 @@ matching rules, and the two-task analyze/apply split.
 
 **Built and validated:** the analyzer-only alpha (§2), on both server lines.
 
-**Next:** collect classification results and hold the go/no-go review (§2.4).
-Nothing in Milestone 2 or 3 starts before that review.
+**Next:** collect classification results and hold the go/no-go review (§2). Nothing
+in Milestone 2 or 3 starts before that review.
 
 ---
 
@@ -52,7 +52,8 @@ in [`evidence/alpha/`](evidence/alpha/). What is in the tree:
 ```
 src/Jellyfin.Plugin.UserDataRestore.Core/   matching, classification, planning — no Jellyfin reference
 src/Jellyfin.Plugin.UserDataRestore/        plugin, scheduled task, host adapters
-tests/…Core.Tests/                          69 tests over the §12.1 cases
+tests/…Core.Tests/                          86 tests over the §12.1 cases and the sweep generator
+tools/…Sweep/                               the parameter sweep behind evidence/sweep/
 build.sh                                    both artifacts, with packaging checks
 ```
 
@@ -132,10 +133,20 @@ Refinements made while building, none of which loosen §7:
   it, and widening the sufficient set is a design change. The plan counts how many
   candidates it would have unblocked, so the question can be settled with data
   rather than reopened on instinct.
+- **Nothing is required on the configuration page.** No libraries selected means
+  every movie and TV library; no folders typed means those libraries' own
+  locations, read from the server (DESIGN §6.1). Requiring both guaranteed that a
+  fresh install's first run failed, and the path field asked an operator to retype
+  what the server already knew, in a form whose failure — a host path where the
+  server sees a container path — excluded every item and reported "nothing
+  recoverable". Whatever the scope resolves to is what the plan records.
 - **Item queries must hydrate provider IDs.** Without `ItemFields.ProviderIds`
   every item reports only its own GUID and the whole plugin quietly finds nothing.
   The plan carries `eligibleTargetsWithProviderKeys` and the task warns on the
-  shape of that failure. See [`evidence/alpha/`](evidence/alpha/).
+  shape of that failure. See [`evidence/alpha/`](evidence/alpha/). The same shape
+  appeared twice more — a mistyped path prefix, and a dropped mount — so exclusion
+  reasons are now counted per item and reported in the plan, with a warning when
+  most items were dropped for a missing media file.
 - **Canonical plan hashing preserves array order.** Sorting arrays before hashing
   would let the "exact ordered list of writes" be reordered while still matching
   the ID an operator reviewed and armed. Determinism comes from the plan builder
