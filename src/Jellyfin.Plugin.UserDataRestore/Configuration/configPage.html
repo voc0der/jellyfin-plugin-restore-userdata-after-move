@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Restore User Data After Move</title>
+</head>
+<body>
+<div id="userDataRestoreConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-checkbox,emby-select">
+    <div data-role="content">
+        <div class="content-primary">
+
+            <div class="verticalSection">
+                <h2 class="sectionTitle">Restore User Data After Move</h2>
+                <p>
+                    When a file's path changes, Jellyfin replaces the item and leaves the old item's
+                    played state, resume position, favourite and rating behind as unreachable rows.
+                    This plugin finds those rows and works out which current item each one belongs to.
+                </p>
+                <p class="fieldDescription" style="margin-top:1em;">
+                    <strong>This build analyses only.</strong> It contains no task that can change
+                    Jellyfin user data. It writes a plan file you can review; nothing consumes it.
+                </p>
+            </div>
+
+            <form id="userDataRestoreConfigForm">
+
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Eligible libraries</h3>
+                    <div class="fieldDescription">
+                        Only items in these libraries can be recovery targets. Nothing is analysed
+                        until at least one is selected.
+                    </div>
+                    <div id="libraryList" style="margin-top:1em;"></div>
+                </div>
+
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Final path prefixes</h3>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="finalPathPrefixes" rows="4" class="emby-input"
+                                  placeholder="/data/library/movies&#10;/data/library/tv"></textarea>
+                        <div class="fieldDescription">
+                            One absolute path per line. A target must sit beneath one of these to be
+                            recovered. Comparison is path-component aware, so
+                            <code>/data/library/tv2</code> is not beneath <code>/data/library/tv</code>.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Options</h3>
+
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="requirePathExists" />
+                        <span>Require the target's media file to exist on disk</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Turn this off only if the library lives on storage that is deliberately
+                        offline while you analyse.
+                    </div>
+
+                    <label class="emby-checkbox-label" style="margin-top:1em;">
+                        <input is="emby-checkbox" type="checkbox" id="verboseLogging" />
+                        <span>Log every classified row at debug level</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        The plan file always contains the full detail. This only adds it to the
+                        server log, which includes titles and user IDs.
+                    </div>
+
+                    <div class="inputContainer" style="margin-top:1em;">
+                        <label class="inputLabel inputLabelUnfocused" for="planRetentionCount">Plans to keep</label>
+                        <input is="emby-input" type="number" id="planRetentionCount" min="1" max="100" step="1" />
+                        <div class="fieldDescription">Older plan files are deleted after each run.</div>
+                    </div>
+                </div>
+
+                <div class="verticalSection">
+                    <button is="emby-button" type="submit" class="raised button-submit block">
+                        <span>Save</span>
+                    </button>
+                </div>
+
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Running the analysis</h3>
+                    <p class="fieldDescription">
+                        Finish moving your files and let Jellyfin complete a full scan first, so the
+                        old items are gone and the new ones exist. Then run
+                        <strong>Analyze detached user data</strong> from Dashboard &rarr; Scheduled Tasks.
+                        It has no schedule and never will; run it by hand.
+                    </p>
+                    <p class="fieldDescription">
+                        The task reports counts per outcome and writes a plan under the plugin's data
+                        folder. A high "no match" or "ambiguous" count is a real answer about your
+                        library, not a failure.
+                    </p>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '6b416775-6a90-436f-a034-796c52f5a317';
+            var page = document.querySelector('#userDataRestoreConfigPage');
+
+            function renderLibraries(folders, selectedIds) {
+                var container = page.querySelector('#libraryList');
+                container.innerHTML = '';
+
+                if (!folders.length) {
+                    container.innerHTML = '<div class="fieldDescription">No libraries found.</div>';
+                    return;
+                }
+
+                folders.forEach(function (folder) {
+                    var id = folder.ItemId;
+                    var label = document.createElement('label');
+                    label.className = 'emby-checkbox-label';
+
+                    var input = document.createElement('input');
+                    input.setAttribute('is', 'emby-checkbox');
+                    input.type = 'checkbox';
+                    input.className = 'libraryCheckbox';
+                    input.setAttribute('data-libraryid', id);
+                    input.checked = selectedIds.some(function (selected) {
+                        return String(selected).toLowerCase() === String(id).toLowerCase();
+                    });
+
+                    var span = document.createElement('span');
+                    span.textContent = folder.Name + ' (' + (folder.CollectionType || 'mixed') + ')';
+
+                    label.appendChild(input);
+                    label.appendChild(span);
+                    container.appendChild(label);
+                });
+            }
+
+            function load() {
+                Dashboard.showLoadingMsg();
+
+                Promise.all([
+                    ApiClient.getPluginConfiguration(pluginId),
+                    ApiClient.getVirtualFolders()
+                ]).then(function (results) {
+                    var config = results[0];
+                    var folders = results[1] || [];
+
+                    renderLibraries(folders, config.EligibleLibraryIds || []);
+                    page.querySelector('#finalPathPrefixes').value = (config.FinalPathPrefixes || []).join('\n');
+                    page.querySelector('#requirePathExists').checked = config.RequirePathExists !== false;
+                    page.querySelector('#verboseLogging').checked = config.VerboseLogging === true;
+                    page.querySelector('#planRetentionCount').value = config.PlanRetentionCount || 5;
+
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+
+            function save(event) {
+                event.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    config.EligibleLibraryIds = Array.prototype.map.call(
+                        page.querySelectorAll('.libraryCheckbox:checked'),
+                        function (input) { return input.getAttribute('data-libraryid'); });
+
+                    config.FinalPathPrefixes = page.querySelector('#finalPathPrefixes').value
+                        .split('\n')
+                        .map(function (line) { return line.trim(); })
+                        .filter(function (line) { return line.length > 0; });
+
+                    config.RequirePathExists = page.querySelector('#requirePathExists').checked;
+                    config.VerboseLogging = page.querySelector('#verboseLogging').checked;
+                    config.PlanRetentionCount = parseInt(page.querySelector('#planRetentionCount').value, 10) || 5;
+
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+
+                return false;
+            }
+
+            page.addEventListener('pageshow', load);
+            page.querySelector('#userDataRestoreConfigForm').addEventListener('submit', save);
+        })();
+    </script>
+</div>
+</body>
+</html>

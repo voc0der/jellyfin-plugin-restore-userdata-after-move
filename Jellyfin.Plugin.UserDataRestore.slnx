@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Jellyfin.Plugin.UserDataRestore.Core/Jellyfin.Plugin.UserDataRestore.Core.csproj" />
+    <Project Path="src/Jellyfin.Plugin.UserDataRestore/Jellyfin.Plugin.UserDataRestore.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Jellyfin.Plugin.UserDataRestore.Core.Tests/Jellyfin.Plugin.UserDataRestore.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,119 @@
+## Jellyfin 12.0 RC5 — analyze task output
+
+Task output only, grouped by server session in the order the sessions ran.
+Absolute paths collapsed to <SCRATCH>.
+
+### session 1 — wrong-ABI build installed (gate refusal recorded in the task result, not here)
+
+[14:12:15.169] [INF] [7] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.Core.dll
+[14:12:15.170] [INF] [7] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.dll
+   at Jellyfin.Plugin.UserDataRestore.Jellyfin.ServerVersionGate.EnsureSupported(Version running)
+   at Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask.ExecuteAsync(IProgress`1 progress, CancellationToken cancellationToken)
+[14:12:59.990] [INF] [10] Emby.Server.Implementations.ScheduledTasks.TaskManager: Analyze detached user data Failed after 0 minute(s) and 0 seconds
+   at Jellyfin.Plugin.UserDataRestore.Jellyfin.ServerVersionGate.EnsureSupported(Version running)
+   at Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask.ExecuteAsync(IProgress`1 progress, CancellationToken cancellationToken)
+[14:14:16.356] [INF] [10] Emby.Server.Implementations.ScheduledTasks.TaskManager: Analyze detached user data Failed after 0 minute(s) and 0 seconds
+
+### session 2 — correct build, movies
+
+
+### session 3 — library scan after analysis
+
+[14:15:13.891] [INF] [9] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.Core.dll
+[14:15:13.892] [INF] [9] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.dll
+[14:16:09.242] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Analyzing detached user data. Plugin 1.0.0.0, built for Jellyfin 12.0.0, running on 12.0.0.0.
+[14:16:09.500] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: UserData is unchanged: 6 rows, digest c2055fab105c12fe9f1962b605dff31328657239c90fb2d0abec908a049d0572.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Inspected 6 detached rows against 1 eligible items for 2 users.
+2 recoverable snapshots found. This build cannot apply them.
+Candidates: ready=2
+Rows: ready=4, no_current_key_match=2
+Plan 6ba19802e41c3f368a6662c6b7084a14fef3552f118e7be10d5aa2080bf7420a written to <SCRATCH>/srv/data/plugins/Jellyfin.Plugin.UserDataRestore/plans/plan-20260812T181609Z-6ba19802e41c.json
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ready: 2 candidates, 4 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification already_applied: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification source_has_no_effect: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unknown_user: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification no_current_key_match: 0 candidates, 2 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ambiguous_current_key: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unsupported_current_item: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification path_outside_final_scope: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification insufficient_identity_evidence: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification inconsistent_source_state: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification invalid_source_state: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification current_state_conflict: 0 candidates, 0 rows.
+[14:16:09.511] [INF] [23] Emby.Server.Implementations.ScheduledTasks.TaskManager: Analyze detached user data Completed after 0 minute(s) and 0 seconds
+
+### session 4 — episode moved
+
+[14:44:48.666] [INF] [10] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.Core.dll
+[14:44:48.667] [INF] [10] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.dll
+[14:48:12.263] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Analyzing detached user data. Plugin 1.0.0.0, built against Jellyfin package 12.0.0-rc5 for server 12.0.0, running on 12.0.0.0.
+[14:48:12.455] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: UserData is unchanged: 10 rows, digest 7823b82dfcb7097b8fb147adb2ca35a1f1cae656fc70c396d074c061ff5b2f6c.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Inspected 10 detached rows against 2 eligible items for 2 users.
+4 recoverable snapshots found. This build cannot apply them.
+Candidates: ready=4
+Rows: ready=6, no_current_key_match=4
+Plan 932dc021e3fcf6b50dfa091e06cd10e3cfb52bce3b8bc97c69acce65ae9b0c3a written to <SCRATCH>/srv/data/plugins/Jellyfin.Plugin.UserDataRestore/plans/plan-20260812T184812Z-932dc021e3fc.json
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ready: 4 candidates, 6 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification already_applied: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification source_has_no_effect: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unknown_user: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification no_current_key_match: 0 candidates, 4 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ambiguous_current_key: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unsupported_current_item: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification path_outside_final_scope: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification insufficient_identity_evidence: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification inconsistent_source_state: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification invalid_source_state: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification current_state_conflict: 0 candidates, 0 rows.
+[14:48:12.464] [INF] [9] Emby.Server.Implementations.ScheduledTasks.TaskManager: Analyze detached user data Completed after 0 minute(s) and 0 seconds
+
+### session 5 — package-version provenance added
+
+[14:56:15.280] [INF] [9] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.Core.dll
+[14:56:15.281] [INF] [9] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.dll
+[14:56:59.979] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Analyzing detached user data. Plugin 1.0.0.0, built against Jellyfin package 12.0.0-rc5 for server 12.0.0, running on 12.0.0.0.
+[14:57:00.254] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: UserData is unchanged: 10 rows, digest 7823b82dfcb7097b8fb147adb2ca35a1f1cae656fc70c396d074c061ff5b2f6c.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Inspected 10 detached rows against 2 eligible items for 2 users.
+4 recoverable snapshots found. This build cannot apply them.
+Candidates: ready=4
+Rows: ready=6, no_current_key_match=4
+Plan 4c7f8c6dcc298e843f0a2362d08772da1658420f87a0249fc30998f506158388 written to <SCRATCH>/srv/data/plugins/Jellyfin.Plugin.UserDataRestore/plans/plan-20260812T185700Z-4c7f8c6dcc29.json
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ready: 4 candidates, 6 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification already_applied: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification source_has_no_effect: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unknown_user: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification no_current_key_match: 0 candidates, 4 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ambiguous_current_key: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unsupported_current_item: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification path_outside_final_scope: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification insufficient_identity_evidence: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification inconsistent_source_state: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification invalid_source_state: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification current_state_conflict: 0 candidates, 0 rows.
+[14:57:00.265] [INF] [22] Emby.Server.Implementations.ScheduledTasks.TaskManager: Analyze detached user data Completed after 0 minute(s) and 0 seconds
+
+### session 6 — SHIPPED BUILD, source of the published plan
+
+[15:08:32.424] [INF] [10] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.Core.dll
+[15:08:32.425] [INF] [10] Emby.Server.Implementations.Plugins.PluginManager: Loaded assembly Jellyfin.Plugin.UserDataRestore, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null from <SCRATCH>/srv/data/plugins/UserDataRestore_1.0.0.0/Jellyfin.Plugin.UserDataRestore.dll
+[15:09:17.236] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Analyzing detached user data. Plugin 1.0.0.0, built against Jellyfin package 12.0.0-rc5 for server 12.0.0, running on 12.0.0.0.
+[15:09:17.528] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: UserData is unchanged: 10 rows, digest 7823b82dfcb7097b8fb147adb2ca35a1f1cae656fc70c396d074c061ff5b2f6c.
+[15:09:17.538] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Inspected 10 detached rows against 2 eligible items for 2 users.
+4 recoverable snapshots found. This build cannot apply them.
+Candidates: ready=4
+Rows: ready=6, no_current_key_match=4
+Plan 9978a9fb2643c6ffcdbdd88c4d2900f623a6aedaabb62c245ecb21a7170fffa5 written to <SCRATCH>/srv/data/plugins/Jellyfin.Plugin.UserDataRestore/plans/plan-20260812T190917Z-9978a9fb2643.json
+[15:09:17.538] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ready: 4 candidates, 6 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification already_applied: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification source_has_no_effect: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unknown_user: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification no_current_key_match: 0 candidates, 4 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification ambiguous_current_key: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification unsupported_current_item: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification path_outside_final_scope: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification insufficient_identity_evidence: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification inconsistent_source_state: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification invalid_source_state: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Jellyfin.Plugin.UserDataRestore.ScheduledTasks.AnalyzeDetachedUserDataTask: Classification current_state_conflict: 0 candidates, 0 rows.
+[15:09:17.539] [INF] [16] Emby.Server.Implementations.ScheduledTasks.TaskManager: Analyze detached user data Completed after 0 minute(s) and 0 seconds
+

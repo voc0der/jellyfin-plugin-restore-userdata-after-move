@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Keep GitHub Actions up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # Keep NuGet packages up to date (requires careful review)
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "nuget"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    # Group Jellyfin packages together since they need to match versions.
+    #
+    # Note that a bump here is never routine for this plugin: the package version
+    # is pinned per server line in the plugin csproj, it is what the runtime
+    # version gate enforces, and DESIGN §11 requires the integration suite to pass
+    # against a version before it is claimed. Treat these PRs as "a new server
+    # line is available", not as a dependency update.
+    groups:
+      jellyfin-packages:
+        patterns:
+          - "Jellyfin.*"

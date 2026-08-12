@@ -1,0 +1,82 @@
+name: PR Develop Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number to build (example: 1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Validate PR input
+      shell: bash
+      run: |
+        PR_NUMBER="${{ github.event.inputs.pr_number }}"
+        if ! [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
+          echo "Invalid pr_number input: ${PR_NUMBER}"
+          exit 1
+        fi
+
+    - name: Checkout PR branch
+      shell: bash
+      run: |
+        PR_NUMBER="${{ github.event.inputs.pr_number }}"
+        git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}"
+        git checkout "pr-${PR_NUMBER}"
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          9.0.x
+          10.0.x
+
+    - name: Set build metadata
+      shell: bash
+      run: |
+        PR_NUMBER="${{ github.event.inputs.pr_number }}"
+        echo "PR_NUMBER=${PR_NUMBER}" >> "$GITHUB_ENV"
+        echo "BUILD_VERSION=0.0.0.${PR_NUMBER}" >> "$GITHUB_ENV"
+
+    # build.sh runs the tests, builds both server lines, and refuses to package if
+    # a host assembly leaked in or meta.json disagrees with the target.
+    - name: Build and package both server lines
+      shell: bash
+      run: VERSION="${BUILD_VERSION}" ./build.sh
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: "restore-userdata-pr-${{ env.PR_NUMBER }}"
+        path: artifacts/*.zip
+        if-no-files-found: error
+
+    - name: Build summary
+      shell: bash
+      run: |
+        {
+          echo "### PR develop build complete"
+          echo ""
+          echo "- PR: #${PR_NUMBER}"
+          echo "- Build version: \`${BUILD_VERSION}\`"
+          echo ""
+          echo "These are develop builds, versioned \`0.0.0.<pr>\` so they can never"
+          echo "outrank a release in the plugin catalogue. Install the archive matching"
+          echo "your exact server version."
+          echo ""
+          for zip in artifacts/*.zip; do
+            echo "- \`$(basename "${zip}")\`"
+          done
+        } >> "$GITHUB_STEP_SUMMARY"

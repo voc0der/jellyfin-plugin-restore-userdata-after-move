@@ -1,0 +1,90 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- One source tree, two artifacts (DESIGN §11). The 10.11.11 probe in
+         evidence/ needed a patch file to retarget; multi-targeting removes that
+         step, and the compiler checks both ABIs on every build. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <AssemblyName>Jellyfin.Plugin.UserDataRestore</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.UserDataRestore</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Which server each build is for. JellyfinRuntimeVersion is what the plugin
+       checks IApplicationHost.ApplicationVersion against before it opens a
+       database context; §17.3 showed targetAbi is only a minimum-version filter,
+       so a 10.11-targeted build otherwise loads happily on 12.0. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <JellyfinPackageVersion>10.11.11</JellyfinPackageVersion>
+    <JellyfinRuntimeVersion>10.11.11</JellyfinRuntimeVersion>
+    <JellyfinTargetAbi>10.11.11.0</JellyfinTargetAbi>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <JellyfinPackageVersion>12.0.0-rc5</JellyfinPackageVersion>
+    <!-- 12.0 RC5 reports itself as 12.0.0; the prerelease tag is not part of
+         IApplicationHost.ApplicationVersion. Verified in evidence/results. -->
+    <JellyfinRuntimeVersion>12.0.0</JellyfinRuntimeVersion>
+    <JellyfinTargetAbi>12.0.0.0</JellyfinTargetAbi>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="JellyfinRuntimeVersion" Value="$(JellyfinRuntimeVersion)" />
+    <AssemblyMetadata Include="JellyfinPackageVersion" Value="$(JellyfinPackageVersion)" />
+    <AssemblyMetadata Include="JellyfinTargetAbi" Value="$(JellyfinTargetAbi)" />
+  </ItemGroup>
+
+  <!-- Host assemblies are compile-time only. The running server supplies them;
+       shipping copies inside the plugin archive is what breaks type identity. -->
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinPackageVersion)">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="$(JellyfinPackageVersion)">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jellyfin.Plugin.UserDataRestore.Core/Jellyfin.Plugin.UserDataRestore.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration/configPage.html" />
+  </ItemGroup>
+
+  <!-- meta.json is generated from the same properties that drive the version
+       gate and the package reference, so the manifest ABI, the compiled-against
+       package, and the version the plugin enforces at runtime cannot drift
+       apart. -->
+  <Target Name="GeneratePluginManifest" AfterTargets="Build;Publish">
+    <ItemGroup>
+      <PluginManifestLine Include="{" />
+      <PluginManifestLine Include="  &quot;guid&quot;: &quot;6b416775-6a90-436f-a034-796c52f5a317&quot;," />
+      <PluginManifestLine Include="  &quot;name&quot;: &quot;Restore User Data After Move&quot;," />
+      <PluginManifestLine Include="  &quot;overview&quot;: &quot;Recovers user data Jellyfin stranded when media paths changed.&quot;," />
+      <PluginManifestLine Include="  &quot;description&quot;: &quot;Analysis-only build. Finds UserData rows detached by a path change and reports which current item each stranded snapshot belongs to. Contains no task that can modify user data.&quot;," />
+      <PluginManifestLine Include="  &quot;owner&quot;: &quot;coldarr&quot;," />
+      <PluginManifestLine Include="  &quot;category&quot;: &quot;General&quot;," />
+      <PluginManifestLine Include="  &quot;version&quot;: &quot;$(PluginVersion)&quot;," />
+      <PluginManifestLine Include="  &quot;targetAbi&quot;: &quot;$(JellyfinTargetAbi)&quot;," />
+      <PluginManifestLine Include="  &quot;framework&quot;: &quot;$(TargetFramework)&quot;," />
+      <PluginManifestLine Include="  &quot;status&quot;: &quot;Active&quot;," />
+      <PluginManifestLine Include="  &quot;autoUpdate&quot;: false," />
+      <PluginManifestLine Include="  &quot;imagePath&quot;: &quot;&quot;" />
+      <PluginManifestLine Include="}" />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(OutputPath)meta.json"
+                      Lines="@(PluginManifestLine)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+
+    <WriteLinesToFile File="$(PublishDir)meta.json"
+                      Lines="@(PluginManifestLine)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Condition="'$(PublishDir)' != ''" />
+  </Target>
+
+</Project>

@@ -1,0 +1,14 @@
+{
+  "guid": "b7e4c1a2-3f5d-4e88-9a10-2c6f7d8e9b01",
+  "name": "Gate 0 Probe",
+  "overview": "Probes host database-context injection.",
+  "description": "Disposable probe: can a third-party plugin resolve IDbContextFactory<JellyfinDbContext>?",
+  "owner": "coldarr-test",
+  "category": "General",
+  "version": "1.0.0.0",
+  "targetAbi": "10.11.11.0",
+  "framework": "net9.0",
+  "status": "Active",
+  "autoUpdate": false,
+  "imagePath": ""
+}

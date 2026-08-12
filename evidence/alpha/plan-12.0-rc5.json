@@ -1,0 +1,608 @@
+{
+  "schemaVersion": "1",
+  "pluginVersion": "1.0.0.0",
+  "targetJellyfinVersion": "12.0.0",
+  "builtAgainstJellyfinPackage": "12.0.0-rc5",
+  "targetAbi": "12.0.0.0",
+  "serverId": "ba8cfe651c34459b8c5dd0afeb1fb1c9",
+  "serverVersion": "12.0.0",
+  "createdUtc": "2026-08-12T19:09:17.4673213+00:00",
+  "configuredLibraryIds": [
+    "a656b907-eb3a-7353-2e40-e44b968d0225",
+    "f137a2dd-21bb-c1b9-9aa5-c0f6bf02a805"
+  ],
+  "finalPathPrefixes": [
+    "<SCRATCH>/media/cold/movies",
+    "<SCRATCH>/media/cold/tv"
+  ],
+  "applySupported": false,
+  "summary": {
+    "rowCounts": {
+      "ready": 6,
+      "already_applied": 0,
+      "source_has_no_effect": 0,
+      "unknown_user": 0,
+      "no_current_key_match": 4,
+      "ambiguous_current_key": 0,
+      "unsupported_current_item": 0,
+      "path_outside_final_scope": 0,
+      "insufficient_identity_evidence": 0,
+      "inconsistent_source_state": 0,
+      "invalid_source_state": 0,
+      "current_state_conflict": 0
+    },
+    "candidateCounts": {
+      "ready": 4,
+      "already_applied": 0,
+      "source_has_no_effect": 0,
+      "unknown_user": 0,
+      "no_current_key_match": 0,
+      "ambiguous_current_key": 0,
+      "unsupported_current_item": 0,
+      "path_outside_final_scope": 0,
+      "insufficient_identity_evidence": 0,
+      "inconsistent_source_state": 0,
+      "invalid_source_state": 0,
+      "current_state_conflict": 0
+    },
+    "writeCount": 4,
+    "diagnostics": {
+      "detachedRowsInspected": 10,
+      "currentItemsInspected": 2,
+      "eligibleTargets": 2,
+      "eligibleTargetsWithProviderKeys": 2,
+      "distinctCurrentKeys": 5,
+      "knownUsers": 2,
+      "seriesGuidEpisodeDerivedRows": 0,
+      "candidatesBlockedOnlyBySeriesGuidEvidence": 0,
+      "uniqueMatchEvidence.other_provider": 2,
+      "uniqueMatchEvidence.imdb": 2,
+      "uniqueMatchEvidence.series_imdb_episode": 2
+    }
+  },
+  "readOnlyProof": {
+    "rowCountBefore": 10,
+    "rowCountAfter": 10,
+    "digestBefore": "7823b82dfcb7097b8fb147adb2ca35a1f1cae656fc70c396d074c061ff5b2f6c",
+    "digestAfter": "7823b82dfcb7097b8fb147adb2ca35a1f1cae656fc70c396d074c061ff5b2f6c",
+    "unchanged": true
+  },
+  "sourceRows": [
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "customDataKey": "52db600d-5aa8-0a08-3f9c-5d3d3ab9990e",
+      "retentionDate": "2026-08-12T18:47:27.2161876Z",
+      "state": {
+        "played": true,
+        "playCount": 2,
+        "playbackPositionTicks": 98765,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-02-02T20:00:00.0000000Z",
+        "rating": 8
+      },
+      "reportOnly": {
+        "likes": true,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=52db600d-5aa8-0a08-3f9c-5d3d3ab9990e;retention=2026-08-12T18:47:27.2161876Z;played=True;count=2;ticks=98765;fav=True;last=2026-02-02T20:00:00.0000000Z;rating=8;likes=1;audio=-;subtitle=-",
+      "reason": "no_current_key_match",
+      "violation": null,
+      "targetItemId": null,
+      "evidence": "unknown",
+      "evidenceProvider": null,
+      "seriesGuidEpisodeDerived": false,
+      "matches": []
+    },
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "customDataKey": "54bfdfa7-9eee-869c-23fd-9732ced3bd7c",
+      "retentionDate": "2026-08-12T18:11:10.7887406Z",
+      "state": {
+        "played": true,
+        "playCount": 3,
+        "playbackPositionTicks": 12345,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-01-01T12:00:00.0000000Z",
+        "rating": 10
+      },
+      "reportOnly": {
+        "likes": true,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=54bfdfa7-9eee-869c-23fd-9732ced3bd7c;retention=2026-08-12T18:11:10.7887406Z;played=True;count=3;ticks=12345;fav=True;last=2026-01-01T12:00:00.0000000Z;rating=10;likes=1;audio=-;subtitle=-",
+      "reason": "no_current_key_match",
+      "violation": null,
+      "targetItemId": null,
+      "evidence": "unknown",
+      "evidenceProvider": null,
+      "seriesGuidEpisodeDerived": false,
+      "matches": []
+    },
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "customDataKey": "603",
+      "retentionDate": "2026-08-12T18:11:10.7887406Z",
+      "state": {
+        "played": true,
+        "playCount": 3,
+        "playbackPositionTicks": 12345,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-01-01T12:00:00.0000000Z",
+        "rating": 10
+      },
+      "reportOnly": {
+        "likes": true,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=603;retention=2026-08-12T18:11:10.7887406Z;played=True;count=3;ticks=12345;fav=True;last=2026-01-01T12:00:00.0000000Z;rating=10;likes=1;audio=-;subtitle=-",
+      "reason": "ready",
+      "violation": null,
+      "targetItemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "evidence": "other_provider",
+      "evidenceProvider": "Tmdb",
+      "seriesGuidEpisodeDerived": false,
+      "matches": [
+        {
+          "itemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+          "kind": "Movie",
+          "exclusion": "None",
+          "name": "Test Movie",
+          "path": "<SCRATCH>/media/cold/movies/Test Movie (2020) [v2]/Test Movie (2020).mp4"
+        }
+      ]
+    },
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "customDataKey": "tt0133093",
+      "retentionDate": "2026-08-12T18:11:10.7887406Z",
+      "state": {
+        "played": true,
+        "playCount": 3,
+        "playbackPositionTicks": 12345,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-01-01T12:00:00.0000000Z",
+        "rating": 10
+      },
+      "reportOnly": {
+        "likes": true,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=tt0133093;retention=2026-08-12T18:11:10.7887406Z;played=True;count=3;ticks=12345;fav=True;last=2026-01-01T12:00:00.0000000Z;rating=10;likes=1;audio=-;subtitle=-",
+      "reason": "ready",
+      "violation": null,
+      "targetItemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "evidence": "imdb",
+      "evidenceProvider": "Imdb",
+      "seriesGuidEpisodeDerived": false,
+      "matches": [
+        {
+          "itemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+          "kind": "Movie",
+          "exclusion": "None",
+          "name": "Test Movie",
+          "path": "<SCRATCH>/media/cold/movies/Test Movie (2020) [v2]/Test Movie (2020).mp4"
+        }
+      ]
+    },
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "customDataKey": "tt0903747001001",
+      "retentionDate": "2026-08-12T18:47:27.2161876Z",
+      "state": {
+        "played": true,
+        "playCount": 2,
+        "playbackPositionTicks": 98765,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-02-02T20:00:00.0000000Z",
+        "rating": 8
+      },
+      "reportOnly": {
+        "likes": true,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=tt0903747001001;retention=2026-08-12T18:47:27.2161876Z;played=True;count=2;ticks=98765;fav=True;last=2026-02-02T20:00:00.0000000Z;rating=8;likes=1;audio=-;subtitle=-",
+      "reason": "ready",
+      "violation": null,
+      "targetItemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+      "evidence": "series_imdb_episode",
+      "evidenceProvider": "Imdb",
+      "seriesGuidEpisodeDerived": false,
+      "matches": [
+        {
+          "itemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+          "kind": "Episode",
+          "exclusion": "None",
+          "name": "Test Show S01E01",
+          "path": "<SCRATCH>/media/cold/tv/Test Show (moved)/Season 01/Test Show S01E01.mp4"
+        }
+      ]
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "customDataKey": "52db600d-5aa8-0a08-3f9c-5d3d3ab9990e",
+      "retentionDate": "2026-08-12T18:47:27.2161876Z",
+      "state": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 4200000000,
+        "isFavorite": false,
+        "lastPlayedDate": null,
+        "rating": 3
+      },
+      "reportOnly": {
+        "likes": false,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=52db600d-5aa8-0a08-3f9c-5d3d3ab9990e;retention=2026-08-12T18:47:27.2161876Z;played=False;count=0;ticks=4200000000;fav=False;last=-;rating=3;likes=0;audio=-;subtitle=-",
+      "reason": "no_current_key_match",
+      "violation": null,
+      "targetItemId": null,
+      "evidence": "unknown",
+      "evidenceProvider": null,
+      "seriesGuidEpisodeDerived": false,
+      "matches": []
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "customDataKey": "54bfdfa7-9eee-869c-23fd-9732ced3bd7c",
+      "retentionDate": "2026-08-12T18:11:10.7887406Z",
+      "state": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 600000000,
+        "isFavorite": true,
+        "lastPlayedDate": null,
+        "rating": 1
+      },
+      "reportOnly": {
+        "likes": false,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=54bfdfa7-9eee-869c-23fd-9732ced3bd7c;retention=2026-08-12T18:11:10.7887406Z;played=False;count=0;ticks=600000000;fav=True;last=-;rating=1;likes=0;audio=-;subtitle=-",
+      "reason": "no_current_key_match",
+      "violation": null,
+      "targetItemId": null,
+      "evidence": "unknown",
+      "evidenceProvider": null,
+      "seriesGuidEpisodeDerived": false,
+      "matches": []
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "customDataKey": "603",
+      "retentionDate": "2026-08-12T18:11:10.7887406Z",
+      "state": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 600000000,
+        "isFavorite": true,
+        "lastPlayedDate": null,
+        "rating": 1
+      },
+      "reportOnly": {
+        "likes": false,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=603;retention=2026-08-12T18:11:10.7887406Z;played=False;count=0;ticks=600000000;fav=True;last=-;rating=1;likes=0;audio=-;subtitle=-",
+      "reason": "ready",
+      "violation": null,
+      "targetItemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "evidence": "other_provider",
+      "evidenceProvider": "Tmdb",
+      "seriesGuidEpisodeDerived": false,
+      "matches": [
+        {
+          "itemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+          "kind": "Movie",
+          "exclusion": "None",
+          "name": "Test Movie",
+          "path": "<SCRATCH>/media/cold/movies/Test Movie (2020) [v2]/Test Movie (2020).mp4"
+        }
+      ]
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "customDataKey": "tt0133093",
+      "retentionDate": "2026-08-12T18:11:10.7887406Z",
+      "state": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 600000000,
+        "isFavorite": true,
+        "lastPlayedDate": null,
+        "rating": 1
+      },
+      "reportOnly": {
+        "likes": false,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=tt0133093;retention=2026-08-12T18:11:10.7887406Z;played=False;count=0;ticks=600000000;fav=True;last=-;rating=1;likes=0;audio=-;subtitle=-",
+      "reason": "ready",
+      "violation": null,
+      "targetItemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "evidence": "imdb",
+      "evidenceProvider": "Imdb",
+      "seriesGuidEpisodeDerived": false,
+      "matches": [
+        {
+          "itemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+          "kind": "Movie",
+          "exclusion": "None",
+          "name": "Test Movie",
+          "path": "<SCRATCH>/media/cold/movies/Test Movie (2020) [v2]/Test Movie (2020).mp4"
+        }
+      ]
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "customDataKey": "tt0903747001001",
+      "retentionDate": "2026-08-12T18:47:27.2161876Z",
+      "state": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 4200000000,
+        "isFavorite": false,
+        "lastPlayedDate": null,
+        "rating": 3
+      },
+      "reportOnly": {
+        "likes": false,
+        "audioStreamIndex": null,
+        "subtitleStreamIndex": null
+      },
+      "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=tt0903747001001;retention=2026-08-12T18:47:27.2161876Z;played=False;count=0;ticks=4200000000;fav=False;last=-;rating=3;likes=0;audio=-;subtitle=-",
+      "reason": "ready",
+      "violation": null,
+      "targetItemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+      "evidence": "series_imdb_episode",
+      "evidenceProvider": "Imdb",
+      "seriesGuidEpisodeDerived": false,
+      "matches": [
+        {
+          "itemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+          "kind": "Episode",
+          "exclusion": "None",
+          "name": "Test Show S01E01",
+          "path": "<SCRATCH>/media/cold/tv/Test Show (moved)/Season 01/Test Show S01E01.mp4"
+        }
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "targetItemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "targetKind": "Movie",
+      "targetName": "Test Movie",
+      "targetPath": "<SCRATCH>/media/cold/movies/Test Movie (2020) [v2]/Test Movie (2020).mp4",
+      "targetLibraryIds": [
+        "f137a2dd-21bb-c1b9-9aa5-c0f6bf02a805"
+      ],
+      "targetKeys": [
+        "603",
+        "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+        "tt0133093"
+      ],
+      "contributingKeys": [
+        {
+          "key": "603",
+          "evidence": "other_provider",
+          "provider": "Tmdb",
+          "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=603;retention=2026-08-12T18:11:10.7887406Z;played=True;count=3;ticks=12345;fav=True;last=2026-01-01T12:00:00.0000000Z;rating=10;likes=1;audio=-;subtitle=-"
+        },
+        {
+          "key": "tt0133093",
+          "evidence": "imdb",
+          "provider": "Imdb",
+          "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=tt0133093;retention=2026-08-12T18:11:10.7887406Z;played=True;count=3;ticks=12345;fav=True;last=2026-01-01T12:00:00.0000000Z;rating=10;likes=1;audio=-;subtitle=-"
+        }
+      ],
+      "recoveredState": {
+        "played": true,
+        "playCount": 3,
+        "playbackPositionTicks": 12345,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-01-01T12:00:00.0000000Z",
+        "rating": 10
+      },
+      "evidenceRule": "imdb",
+      "currentRowCount": 0,
+      "currentState": null,
+      "reason": "ready"
+    },
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "targetItemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+      "targetKind": "Episode",
+      "targetName": "Test Show S01E01",
+      "targetPath": "<SCRATCH>/media/cold/tv/Test Show (moved)/Season 01/Test Show S01E01.mp4",
+      "targetLibraryIds": [
+        "a656b907-eb3a-7353-2e40-e44b968d0225"
+      ],
+      "targetKeys": [
+        "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+        "tt0903747001001"
+      ],
+      "contributingKeys": [
+        {
+          "key": "tt0903747001001",
+          "evidence": "series_imdb_episode",
+          "provider": "Imdb",
+          "fingerprint": "user=1784ca783ba54256b7f4ae1ffd81a314;key=tt0903747001001;retention=2026-08-12T18:47:27.2161876Z;played=True;count=2;ticks=98765;fav=True;last=2026-02-02T20:00:00.0000000Z;rating=8;likes=1;audio=-;subtitle=-"
+        }
+      ],
+      "recoveredState": {
+        "played": true,
+        "playCount": 2,
+        "playbackPositionTicks": 98765,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-02-02T20:00:00.0000000Z",
+        "rating": 8
+      },
+      "evidenceRule": "imdb",
+      "currentRowCount": 0,
+      "currentState": null,
+      "reason": "ready"
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "targetItemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "targetKind": "Movie",
+      "targetName": "Test Movie",
+      "targetPath": "<SCRATCH>/media/cold/movies/Test Movie (2020) [v2]/Test Movie (2020).mp4",
+      "targetLibraryIds": [
+        "f137a2dd-21bb-c1b9-9aa5-c0f6bf02a805"
+      ],
+      "targetKeys": [
+        "603",
+        "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+        "tt0133093"
+      ],
+      "contributingKeys": [
+        {
+          "key": "603",
+          "evidence": "other_provider",
+          "provider": "Tmdb",
+          "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=603;retention=2026-08-12T18:11:10.7887406Z;played=False;count=0;ticks=600000000;fav=True;last=-;rating=1;likes=0;audio=-;subtitle=-"
+        },
+        {
+          "key": "tt0133093",
+          "evidence": "imdb",
+          "provider": "Imdb",
+          "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=tt0133093;retention=2026-08-12T18:11:10.7887406Z;played=False;count=0;ticks=600000000;fav=True;last=-;rating=1;likes=0;audio=-;subtitle=-"
+        }
+      ],
+      "recoveredState": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 600000000,
+        "isFavorite": true,
+        "lastPlayedDate": null,
+        "rating": 1
+      },
+      "evidenceRule": "imdb",
+      "currentRowCount": 0,
+      "currentState": null,
+      "reason": "ready"
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "targetItemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+      "targetKind": "Episode",
+      "targetName": "Test Show S01E01",
+      "targetPath": "<SCRATCH>/media/cold/tv/Test Show (moved)/Season 01/Test Show S01E01.mp4",
+      "targetLibraryIds": [
+        "a656b907-eb3a-7353-2e40-e44b968d0225"
+      ],
+      "targetKeys": [
+        "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+        "tt0903747001001"
+      ],
+      "contributingKeys": [
+        {
+          "key": "tt0903747001001",
+          "evidence": "series_imdb_episode",
+          "provider": "Imdb",
+          "fingerprint": "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=tt0903747001001;retention=2026-08-12T18:47:27.2161876Z;played=False;count=0;ticks=4200000000;fav=False;last=-;rating=3;likes=0;audio=-;subtitle=-"
+        }
+      ],
+      "recoveredState": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 4200000000,
+        "isFavorite": false,
+        "lastPlayedDate": null,
+        "rating": 3
+      },
+      "evidenceRule": "imdb",
+      "currentRowCount": 0,
+      "currentState": null,
+      "reason": "ready"
+    }
+  ],
+  "writes": [
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "itemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "state": {
+        "played": true,
+        "playCount": 3,
+        "playbackPositionTicks": 12345,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-01-01T12:00:00.0000000Z",
+        "rating": 10
+      },
+      "evidenceRule": "imdb",
+      "sourceFingerprints": [
+        "user=1784ca783ba54256b7f4ae1ffd81a314;key=603;retention=2026-08-12T18:11:10.7887406Z;played=True;count=3;ticks=12345;fav=True;last=2026-01-01T12:00:00.0000000Z;rating=10;likes=1;audio=-;subtitle=-",
+        "user=1784ca783ba54256b7f4ae1ffd81a314;key=tt0133093;retention=2026-08-12T18:11:10.7887406Z;played=True;count=3;ticks=12345;fav=True;last=2026-01-01T12:00:00.0000000Z;rating=10;likes=1;audio=-;subtitle=-"
+      ]
+    },
+    {
+      "userId": "1784ca78-3ba5-4256-b7f4-ae1ffd81a314",
+      "itemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+      "state": {
+        "played": true,
+        "playCount": 2,
+        "playbackPositionTicks": 98765,
+        "isFavorite": true,
+        "lastPlayedDate": "2026-02-02T20:00:00.0000000Z",
+        "rating": 8
+      },
+      "evidenceRule": "imdb",
+      "sourceFingerprints": [
+        "user=1784ca783ba54256b7f4ae1ffd81a314;key=tt0903747001001;retention=2026-08-12T18:47:27.2161876Z;played=True;count=2;ticks=98765;fav=True;last=2026-02-02T20:00:00.0000000Z;rating=8;likes=1;audio=-;subtitle=-"
+      ]
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "itemId": "9d120ac5-62f7-c07d-dcff-eec0ebde9d61",
+      "state": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 600000000,
+        "isFavorite": true,
+        "lastPlayedDate": null,
+        "rating": 1
+      },
+      "evidenceRule": "imdb",
+      "sourceFingerprints": [
+        "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=603;retention=2026-08-12T18:11:10.7887406Z;played=False;count=0;ticks=600000000;fav=True;last=-;rating=1;likes=0;audio=-;subtitle=-",
+        "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=tt0133093;retention=2026-08-12T18:11:10.7887406Z;played=False;count=0;ticks=600000000;fav=True;last=-;rating=1;likes=0;audio=-;subtitle=-"
+      ]
+    },
+    {
+      "userId": "6b9a28d4-9ccd-4e08-b632-feeea7f84e5d",
+      "itemId": "fb9cc1b6-f687-72a1-88af-2b24e6a0cb9e",
+      "state": {
+        "played": false,
+        "playCount": 0,
+        "playbackPositionTicks": 4200000000,
+        "isFavorite": false,
+        "lastPlayedDate": null,
+        "rating": 3
+      },
+      "evidenceRule": "imdb",
+      "sourceFingerprints": [
+        "user=6b9a28d49ccd4e08b632feeea7f84e5d;key=tt0903747001001;retention=2026-08-12T18:47:27.2161876Z;played=False;count=0;ticks=4200000000;fav=False;last=-;rating=3;likes=0;audio=-;subtitle=-"
+      ]
+    }
+  ],
+  "redaction": {
+    "note": "Derived artifact. Absolute paths of the disposable test server were replaced with <SCRATCH>, which changes the hashed content, so this copy deliberately carries no planId and will not pass PlanCanonicalizer.VerifyPlanId. The unmodified plan the server wrote does verify.",
+    "originalPlanId": "9978a9fb2643c6ffcdbdd88c4d2900f623a6aedaabb62c245ecb21a7170fffa5",
+    "originalFileSha256": "4ccfcfe0fd438f85d89e5c62bcddbb4a3bb62b24d3b8bb3efe4f8501f8db9996",
+    "replaced": [
+      "/tmp/claude-1000/-home-vocoder-Code-jellyfin-plugin-restore-userdata-after-move/58bde638-4c94-4feb-bf4d-96f2073c1cd7/scratchpad/jf12"
+    ]
+  }
+}

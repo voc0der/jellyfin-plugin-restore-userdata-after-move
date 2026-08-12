@@ -1,0 +1,37 @@
+--- a/src/Gate0.csproj	2026-08-12 10:48:27.625699372 -0400
++++ b/src/Gate0.csproj	2026-08-12 10:48:27.626097046 -0400
+@@ -1,7 +1,7 @@
+ <Project Sdk="Microsoft.NET.Sdk">
+ 
+   <PropertyGroup>
+-    <TargetFramework>net9.0</TargetFramework>
++    <TargetFramework>net10.0</TargetFramework>
+     <AssemblyName>Jellyfin.Plugin.Gate0</AssemblyName>
+     <RootNamespace>Jellyfin.Plugin.Gate0</RootNamespace>
+     <Nullable>enable</Nullable>
+@@ -12,10 +12,10 @@
+   <!-- Host assemblies: compile-time only. The running server supplies them,
+        and shipping copies inside the plugin is what breaks type identity. -->
+   <ItemGroup>
+-    <PackageReference Include="Jellyfin.Controller" Version="10.11.11">
++    <PackageReference Include="Jellyfin.Controller" Version="12.0.0-rc5">
+       <ExcludeAssets>runtime</ExcludeAssets>
+     </PackageReference>
+-    <PackageReference Include="Jellyfin.Database.Implementations" Version="10.11.11">
++    <PackageReference Include="Jellyfin.Database.Implementations" Version="12.0.0-rc5">
+       <ExcludeAssets>runtime</ExcludeAssets>
+     </PackageReference>
+   </ItemGroup>
+--- a/src/meta.json	2026-08-12 10:48:27.625731412 -0400
++++ b/src/meta.json	2026-08-12 10:48:27.627097043 -0400
+@@ -6,8 +6,8 @@
+   "owner": "coldarr-test",
+   "category": "General",
+   "version": "1.0.0.0",
+-  "targetAbi": "10.11.11.0",
+-  "framework": "net9.0",
++  "targetAbi": "12.0.0.0",
++  "framework": "net10.0",
+   "status": "Active",
+   "autoUpdate": false,
+   "imagePath": ""

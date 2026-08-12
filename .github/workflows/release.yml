@@ -1,0 +1,166 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0  # Fetch all history for changelog generation
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          9.0.x
+          10.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Generate version and changelog
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      id: version
+      run: |
+        # Get the latest tag, or use 1.0.0.0 if none exists
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "1.0.0.0")
+        echo "Latest tag: $LATEST_TAG"
+
+        # Extract version numbers (4-part semantic versioning)
+        IFS='.' read -ra VERSION_PARTS <<< "$LATEST_TAG"
+        MAJOR=${VERSION_PARTS[0]:-1}
+        MINOR=${VERSION_PARTS[1]:-0}
+        BUILD=${VERSION_PARTS[2]:-0}
+        REVISION=${VERSION_PARTS[3]:-0}
+
+        # Increment revision for each commit
+        REVISION=$((REVISION + 1))
+        NEW_VERSION="${MAJOR}.${MINOR}.${BUILD}.${REVISION}"
+
+        echo "New version: $NEW_VERSION"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+        # Generate changelog from commits since last tag
+        echo "## What's Changed" > CHANGELOG.md
+        echo "" >> CHANGELOG.md
+
+        if [ "$LATEST_TAG" != "1.0.0.0" ] || git rev-parse "$LATEST_TAG" >/dev/null 2>&1; then
+          git log ${LATEST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
+        else
+          git log --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
+        fi
+
+        echo "" >> CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LATEST_TAG}...${NEW_VERSION}" >> CHANGELOG.md
+
+        cat CHANGELOG.md
+
+    # build.sh runs the tests, builds both server lines, and refuses to package if
+    # a host assembly leaked into an archive or meta.json disagrees with the
+    # target version or ABI.
+    - name: Build and package both server lines
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: VERSION="${{ steps.version.outputs.version }}" ./build.sh
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: Jellyfin.Plugin.UserDataRestore
+        path: artifacts/*.zip
+        if-no-files-found: ignore
+
+    # Only the 10.11.11 build is published to the plugin catalogue. Jellyfin
+    # treats targetAbi as a *minimum*, so listing both builds under one version
+    # would make each of them look installable on a 12.0 server, and the server
+    # could hand out the 10.11 archive. The 12.0-rc5 archive ships on the release
+    # for people running the RC to install by hand; see README.md.
+    - name: Update manifest.json
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        ZIP_NAME="RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip"
+        CHECKSUM=$(md5sum "artifacts/${ZIP_NAME}" | awk '{print $1}')
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        REPO="${{ github.repository }}"
+
+        # Taken from the archive rather than written here, so the catalogue can
+        # never disagree with what the plugin actually declares.
+        TARGET_ABI=$(unzip -p "artifacts/${ZIP_NAME}" '*/meta.json' | jq -r .targetAbi)
+        echo "targetAbi from artifact: ${TARGET_ABI}"
+
+        jq --arg version "$VERSION" \
+           --rawfile changelog CHANGELOG.md \
+           --arg checksum "$CHECKSUM" \
+           --arg timestamp "$TIMESTAMP" \
+           --arg abi "$TARGET_ABI" \
+           --arg url "https://github.com/${REPO}/releases/download/${VERSION}/${ZIP_NAME}" \
+           '.[0].versions = [{
+             "version": $version,
+             "changelog": $changelog,
+             "targetAbi": $abi,
+             "sourceUrl": $url,
+             "checksum": $checksum,
+             "timestamp": $timestamp
+           }] + .[0].versions' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+
+        # Only advertise an icon once one exists, rather than publishing a URL
+        # that 404s in the plugin catalogue.
+        if [ -f icon.png ]; then
+          IMAGE_URL="https://raw.githubusercontent.com/${REPO}/main/icon.png"
+          jq --arg imageUrl "$IMAGE_URL" '.[0].imageUrl = $imageUrl' manifest.json > manifest.tmp \
+            && mv manifest.tmp manifest.json
+        else
+          echo "No icon.png in the repository root; leaving imageUrl unset."
+          jq 'del(.[0].imageUrl)' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+        fi
+
+    # Pushed with GITHUB_TOKEN, which does not retrigger workflows, so this
+    # commit cannot start another release run.
+    - name: Commit updated manifest
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        git config user.name "voc0der"
+        git config user.email "contact@netspace.in"
+        git add manifest.json
+        git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+        git push || echo "No changes to push"
+
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+
+        {
+          cat CHANGELOG.md
+          echo ""
+          echo "## Which archive do I want?"
+          echo ""
+          echo "| Jellyfin | Archive |"
+          echo "|---|---|"
+          echo "| 10.11.11 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip\` — also available in the plugin catalogue |"
+          echo "| 12.0 RC5 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0-rc5.zip\` — manual install |"
+          echo ""
+          echo "Builds are pinned per server version and the plugin refuses to run on"
+          echo "the wrong one, so pick the archive matching your exact server."
+        } > RELEASE_NOTES.md
+
+        gh release create "$VERSION" \
+          --title "Release $VERSION" \
+          --notes-file RELEASE_NOTES.md \
+          artifacts/*.zip

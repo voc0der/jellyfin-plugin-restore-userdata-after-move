@@ -1,0 +1,135 @@
+## probe run 1
+GATE0 RESULT: total UserData rows = 0, detached (sentinel) rows = 0
+
+## probe run 2
+GATE0 RESULT: total UserData rows = 0, detached (sentinel) rows = 0
+
+## probe run 3
+GATE0 RESULT: total UserData rows = 7, detached (sentinel) rows = 0
+  live      key=603                                    item=74f9957e user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=74f9957e-b453-7dbb-b614-d528834acab2   item=74f9957e user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=tt0133093                              item=74f9957e user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+
+## probe run 4
+GATE0 RESULT: total UserData rows = 10, detached (sentinel) rows = 6
+  DETACHED  key=603                                    item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=tt0133093                              item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=603                                    item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=tt0133093                              item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+
+## probe run 5
+GATE0 RESULT: total UserData rows = 16, detached (sentinel) rows = 6
+  DETACHED  key=603                                    item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=tt0133093                              item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=603                                    item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=tt0133093                              item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=03cb098f user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=603                                    item=03cb098f user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=tt0133093                              item=03cb098f user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=03cb098f user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=603                                    item=03cb098f user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0133093                              item=03cb098f user=18fe613b played=False fav=True rating=None pos=0 retention=None
+
+## probe run 6
+GATE0 RESULT: total UserData rows = 12, detached (sentinel) rows = 4
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:23:50.8830027Z
+  live      key=603                                    item=5fc90611 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=tt0133093                              item=5fc90611 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:23:50.8830027Z
+  live      key=603                                    item=5fc90611 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0133093                              item=5fc90611 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+
+## probe run 7
+GATE0 RESULT: total UserData rows = 12, detached (sentinel) rows = 4
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:23:50.8830027Z
+  live      key=603                                    item=5fc90611 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  live      key=tt0133093                              item=5fc90611 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=None
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:23:50.8830027Z
+  live      key=603                                    item=5fc90611 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0133093                              item=5fc90611 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+
+## probe run 8
+GATE0 RESULT: total UserData rows = 12, detached (sentinel) rows = 8
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:23:50.8830027Z
+  DETACHED  key=603                                    item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=tt0133093                              item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:23:50.8830027Z
+  DETACHED  key=603                                    item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=tt0133093                              item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:25:51.9245506Z
+
+## probe run 9
+GATE0 RESULT: total UserData rows = 18, detached (sentinel) rows = 8
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:23:50.8830027Z
+  DETACHED  key=603                                    item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=tt0133093                              item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:23:50.8830027Z
+  DETACHED  key=603                                    item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=tt0133093                              item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:25:51.9245506Z
+  live      key=550                                    item=ddf4bdf2 user=a7fb7734 played=True fav=False rating=10 pos=0 retention=None
+  live      key=ddf4bdf2-0d58-0f96-9e25-1d4b8bd03ecd   item=ddf4bdf2 user=a7fb7734 played=True fav=False rating=10 pos=0 retention=None
+  live      key=tt0137523                              item=ddf4bdf2 user=a7fb7734 played=True fav=False rating=10 pos=0 retention=None
+  live      key=550                                    item=ddf4bdf2 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=ddf4bdf2-0d58-0f96-9e25-1d4b8bd03ecd   item=ddf4bdf2 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0137523                              item=ddf4bdf2 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+
+## probe run 10
+GATE0 RESULT: total UserData rows = 18, detached (sentinel) rows = 10
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=a7fb7734 played=True fav=False rating=None pos=0 retention=None
+  live      key=e20d6d96-c126-ffa4-af28-fd74a4da81b2   item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  live      key=tt0903747001001                        item=e20d6d96 user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=74f9957e-b453-7dbb-b614-d528834acab2   item=00000000 user=18fe613b played=False fav=True rating=1 pos=0 retention=2026-08-12T14:22:09.2442459Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:23:50.8830027Z
+  DETACHED  key=603                                    item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=tt0133093                              item=00000000 user=a7fb7734 played=True fav=True rating=10 pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=03cb098f-df98-eb27-7f5b-bb682c007e2e   item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:23:50.8830027Z
+  DETACHED  key=603                                    item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:25:51.9245506Z
+  DETACHED  key=tt0133093                              item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:25:51.9245506Z
+  live      key=550                                    item=57f62a1b user=a7fb7734 played=True fav=False rating=10 pos=0 retention=None
+  DETACHED  key=ddf4bdf2-0d58-0f96-9e25-1d4b8bd03ecd   item=00000000 user=a7fb7734 played=True fav=False rating=10 pos=0 retention=2026-08-12T14:38:49.2860966Z
+  live      key=tt0137523                              item=57f62a1b user=a7fb7734 played=True fav=False rating=10 pos=0 retention=None
+  live      key=550                                    item=57f62a1b user=18fe613b played=False fav=True rating=None pos=0 retention=None
+  DETACHED  key=ddf4bdf2-0d58-0f96-9e25-1d4b8bd03ecd   item=00000000 user=18fe613b played=False fav=True rating=None pos=0 retention=2026-08-12T14:38:49.2860966Z
+  live      key=tt0137523                              item=57f62a1b user=18fe613b played=False fav=True rating=None pos=0 retention=None
+

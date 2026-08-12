@@ -1,0 +1,35 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    # The plugin multi-targets net9.0 (Jellyfin 10.11.11) and net10.0 (12.0), so
+    # both SDKs are needed to restore and build the whole solution.
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          9.0.x
+          10.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Check whitespace formatting
+      run: dotnet format whitespace --verify-no-changes --verbosity minimal
+
+    - name: Check C# style formatting
+      run: dotnet format style --verify-no-changes --severity warn --verbosity minimal
+
+    - name: Run tests
+      run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Core.Tests/ --verbosity minimal

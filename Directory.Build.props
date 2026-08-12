@@ -1,0 +1,29 @@
+<Project>
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- One version, four places (DESIGN §5). CI passes -p:Version=x.y.z.w, which
+       is a global property and so wins over the default below; everything else
+       derives from it, including the meta.json the plugin archive ships. Keep the
+       four-part form: Jellyfin's manifest and plugin folder names use it. -->
+  <PropertyGroup>
+    <Version>1.0.0.0</Version>
+    <PluginVersion>$(Version)</PluginVersion>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <Authors>voc0der</Authors>
+    <Company>voc0der</Company>
+    <Product>Restore User Data After Move</Product>
+    <Copyright>Copyright (c) 2026 voc0der</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move</RepositoryUrl>
+  </PropertyGroup>
+
+</Project>

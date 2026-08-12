@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Jellyfin-light core (DESIGN §12.1): matching, classification, plan
+       generation and hashing, with no reference to any Jellyfin assembly so it
+       can be tested exhaustively without a server. -->
+  <PropertyGroup>
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <AssemblyName>Jellyfin.Plugin.UserDataRestore.Core</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.UserDataRestore.Core</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

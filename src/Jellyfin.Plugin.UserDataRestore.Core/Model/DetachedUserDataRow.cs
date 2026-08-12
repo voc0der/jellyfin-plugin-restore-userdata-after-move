@@ -1,0 +1,80 @@
+using System.Globalization;
+
+namespace Jellyfin.Plugin.UserDataRestore.Core.Model;
+
+/// <summary>
+/// One <c>UserData</c> row whose <c>ItemId</c> is the sentinel
+/// <c>00000000-0000-0000-0000-000000000001</c> — a snapshot Jellyfin kept after
+/// the item that owned it was removed (DESIGN §2, §7.1).
+/// </summary>
+public sealed record DetachedUserDataRow
+{
+    /// <summary>Gets the user the snapshot belongs to.</summary>
+    public required Guid UserId { get; init; }
+
+    /// <summary>
+    /// Gets the key exactly as stored. Never normalized, lowercased, stripped of
+    /// prefixes, or parsed as a provider ID (DESIGN §2.1).
+    /// </summary>
+    public required string? CustomDataKey { get; init; }
+
+    /// <summary>Gets the retention stamp Jellyfin applied when it detached the row.</summary>
+    public DateTime? RetentionDate { get; init; }
+
+    /// <summary>Gets a value indicating whether the item was played.</summary>
+    public bool Played { get; init; }
+
+    /// <summary>Gets the play count.</summary>
+    public int PlayCount { get; init; }
+
+    /// <summary>Gets the resume position in ticks.</summary>
+    public long PlaybackPositionTicks { get; init; }
+
+    /// <summary>Gets a value indicating whether the item was a favorite.</summary>
+    public bool IsFavorite { get; init; }
+
+    /// <summary>Gets the last played timestamp.</summary>
+    public DateTime? LastPlayedDate { get; init; }
+
+    /// <summary>Gets the user rating.</summary>
+    public double? Rating { get; init; }
+
+    /// <summary>Gets the like flag. Reported only; not recovered in v1.</summary>
+    public bool? Likes { get; init; }
+
+    /// <summary>Gets the selected audio stream. Reported only; not recovered in v1 (DESIGN §9.2).</summary>
+    public int? AudioStreamIndex { get; init; }
+
+    /// <summary>Gets the selected subtitle stream. Reported only; not recovered in v1.</summary>
+    public int? SubtitleStreamIndex { get; init; }
+
+    /// <summary>Gets the recoverable subset of this row.</summary>
+    public RecoveryState State => new()
+    {
+        Played = Played,
+        PlayCount = PlayCount,
+        PlaybackPositionTicks = PlaybackPositionTicks,
+        IsFavorite = IsFavorite,
+        LastPlayedDate = DateTimeNormalization.ToUtc(LastPlayedDate),
+        Rating = Rating,
+    };
+
+    /// <summary>
+    /// Gets a stable rendering of every field that matters for safety.
+    /// </summary>
+    /// <remarks>
+    /// The apply preflight (DESIGN §9.1) re-reads each planned source row and
+    /// compares this string, so it must cover the report-only fields too: a row
+    /// whose stream indexes changed underneath a plan is a row that changed.
+    /// </remarks>
+    public string Fingerprint => string.Create(
+        CultureInfo.InvariantCulture,
+        $"user={UserId:N};key={CustomDataKey};retention={FormatDate(RetentionDate)};{RecoveryStateComparer.Render(State)};likes={FormatBool(Likes)};audio={FormatInt(AudioStreamIndex)};subtitle={FormatInt(SubtitleStreamIndex)}");
+
+    private static string FormatDate(DateTime? value) =>
+        value is null ? "-" : DateTimeNormalization.ToUtc(value.Value).ToString("O", CultureInfo.InvariantCulture);
+
+    private static string FormatBool(bool? value) => value is null ? "-" : value.Value ? "1" : "0";
+
+    private static string FormatInt(int? value) => value is null ? "-" : value.Value.ToString(CultureInfo.InvariantCulture);
+}
