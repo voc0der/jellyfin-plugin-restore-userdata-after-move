@@ -9,6 +9,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.0.3",
+        "changelog": "## What's Changed\n\n- chore(deps): bump xunit.runner.visualstudio from 3.1.4 to 3.1.5 (dec9ce5)\n- chore(deps): bump Microsoft.NET.Test.Sdk from 17.14.1 to 18.8.1 (8c24bac)\n- chore(deps): bump coverlet.collector from 6.0.4 to 10.0.1 (8afd017)\n- docs(contributing): add branch, commit, and PR naming rules (a4323b9)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.2...1.0.0.3\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.3/RestoreUserDataAfterMove_1.0.0.3_jellyfin-10.11.11.zip",
+        "checksum": "6cf3c9254d6a3558d65869e8b462365d",
+        "timestamp": "2026-08-12T19:53:17Z"
+      },
+      {
         "version": "1.0.0.2",
         "changelog": "## What's Changed\n\n- Take the plugin manifest owner from the same property as the assembly (916318e)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.1...1.0.0.2\n",
         "targetAbi": "10.11.11.0",
