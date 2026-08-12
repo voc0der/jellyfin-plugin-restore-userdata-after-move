@@ -1,151 +1,181 @@
-# Parameter sweep — what recovery depends on
+# Parameter sweep — what the identity rule implies for a library
 
-The go/no-go in [PLAN.md §2](../../PLAN.md) asks whether stranded rows are
-recoverable often enough to justify building the write path. That is a question
-about real libraries, and no synthetic library answers it: whoever generates the
-population picks the inputs, and the inputs *are* the answer.
+This is a **simulation of the analyzer against a model of how Jellyfin strands
+rows**. It establishes what DESIGN §7.3 implies for a library of a given shape.
+It is not evidence about how real libraries are shaped, and no arrangement of it
+could be — the generator's inputs are chosen, so its outputs cannot testify about
+the world.
 
-So this does not report a number. It reports the **response surface** — how
-recovery moves as library shape moves — which turns the open question from "what
-happens on real servers" into "which of these shapes is a real server", something
-an operator can check about themselves without publishing anything.
+What it is good for: showing which library properties the rules are sensitive to,
+how much a run can vary for reasons that have nothing to do with the library's
+average quality, and which failure modes are structural rather than fixable.
 
-Produced by [`tools/Jellyfin.Plugin.UserDataRestore.Sweep`](../../tools/Jellyfin.Plugin.UserDataRestore.Sweep),
-seed `20260812`, 2000 titles per configuration. Raw output: [`sweep.csv`](sweep.csv).
+Produced by [`tools/Jellyfin.Plugin.UserDataRestore.Sweep`](../../tools/Jellyfin.Plugin.UserDataRestore.Sweep).
+Every point is **20 deterministic seeds**, ~2000 items each; the tables report the
+mean and the spread. Raw output: [`sweep.csv`](sweep.csv).
 
 ```sh
-dotnet run --project tools/Jellyfin.Plugin.UserDataRestore.Sweep -- evidence/sweep/sweep.csv
+dotnet run -c Release --project tools/Jellyfin.Plugin.UserDataRestore.Sweep -- evidence/sweep/sweep.csv
 ```
 
-## What is varied, and what is not
+## The model
 
-Parameterised, because real libraries differ in these: IMDb coverage, TMDb
-coverage, share of episodes vs movies, number of users, how much of the library
-each user watched, how many times each title moved, how often a title exists
-twice in the current catalog, and how often the current item already carries user
-state.
+Not parameterised, because the live runs settled it: a moved title keeps one
+detached row per `(user, provider key)` holding its last snapshot, and every
+removed item leaves GUID-keyed rows that nothing can map (DESIGN §17.5). Keys are
+the ones Jellyfin emits — a movie reports IMDb, a bare TMDb number, then its own
+GUID; an episode reports its **series'** IMDb ID with zero-padded season and
+episode, then its own GUID.
 
-**Not** parameterised, because the live runs settled it: how Jellyfin strands rows
-at all. A moved title keeps one detached row per `(user, provider key)` holding its
-last snapshot, and every removed item leaves GUID-keyed rows that nothing can map
-(DESIGN §17.5). The keys are the ones Jellyfin actually emits, in the order it
-emits them — a movie reports IMDb, a bare TMDb number, then its own GUID; an
-episode reports the series' IMDb ID with zero-padded season and episode, then its
-own GUID.
+Parameterised: provider coverage, series length, episode share, users, how much
+of the library was watched, moves per title, duplicate current items, and how
+often the current item already holds state.
 
-The denominator throughout is **opportunities**: `(user, title)` pairs that had
-stranded state. Rows that never became a candidate — because every key they had
-was a dead GUID — count as losses, which is the honest accounting for a question
-about how much comes back.
+**Coverage is drawn once per series and inherited by every episode**, and series
+lengths vary geometrically. That coupling is load-bearing: one absent series IMDb
+ID takes all of that show's episodes with it, so recovery rides on a few hundred
+draws rather than a few thousand independent ones. Drawing per episode — as the
+first version of this tool did — collapses the variance and quietly makes the
+simulation a restatement of its own parameters.
 
-## Result 1 — recovery is IMDb coverage, near enough exactly
+Two measures of coverage are reported:
 
-| IMDb coverage | 0 | 0.2 | 0.4 | 0.6 | 0.8 | 0.9 | 1.0 |
+- **Opportunity-weighted** — of the `(user, item)` pairs that had stranded state,
+  the fraction whose current item exposes an IMDb-derived key. This is what
+  predicts recovery.
+- **Item-weighted** — the same fraction over catalog items. This is what a server
+  can measure about itself, and it is only a proxy. Here the two agree closely
+  *because this generator watches every item with equal probability*. On a real
+  server where one long-running show was watched end to end and another was not,
+  they can diverge, and nothing in this simulation says by how much.
+
+## Result 1 — recovery is opportunity-weighted IMDb coverage
+
+| nominal IMDb coverage | 0 | 0.2 | 0.4 | 0.6 | 0.8 | 0.9 | 1.0 |
 |---|---|---|---|---|---|---|---|
-| recovered | 0.0% | 19.7% | 39.1% | 58.6% | 78.9% | 89.8% | 100% |
+| recovery (mean of 20) | 0.0% | 20.7% | 41.6% | 61.5% | 82.1% | 91.3% | 100% |
+| spread across seeds | — | 13.5–28.8% | 32.4–49.9% | 50.2–68.4% | 71.6–87.2% | 83.0–95.4% | — |
 
-Nothing else in the sweep has this leverage. The line is straight because an IMDb
-key is the only evidence most items can offer: DESIGN §7.3 case 1 (the item's own
-GUID) can never fire for a *moved* item — the GUID it was stranded under belongs
-to the deleted item and matches nothing.
+The mean tracks coverage exactly, which is arithmetic rather than discovery: with
+no duplicates and no pre-existing state, an opportunity is recoverable exactly
+when its item has an IMDb key. The informative part is the **spread**. At nominal
+50% coverage, individual servers of identical description land anywhere from 40%
+to 59%, because coverage is a property of series and series are not the same size.
 
 ## Result 2 — TMDb alone recovers nothing, at any coverage
 
 | TMDb coverage, no IMDb | 0 | 0.25 | 0.5 | 0.75 | 1.0 |
 |---|---|---|---|---|---|
-| recovered | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
+| recovery | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
 
-A perfectly catalogued, 100%-TMDb library recovers **zero**. Jellyfin stores TMDb
-IDs as bare numbers with no provider namespace, so a lone number is not admissible
-identity evidence, and §7.3 case 3 needs *two* provider keys to corroborate each
-other — which a TMDb-only movie does not have.
+A fully catalogued, 100%-TMDb library recovers **zero**. Jellyfin stores TMDb IDs
+as bare numbers with no provider namespace, so a lone number is not admissible
+identity evidence, and §7.3 case 3 needs two provider keys to corroborate — which
+a TMDb-only movie does not have. Episodes never have a second provider key under
+any circumstances.
 
-This is the rule behaving exactly as designed, and it is also the sharpest
-argument the sweep produces: for these libraries the answer is not "add fallback
-matching", it is that the data genuinely does not identify the item.
+This one is not a property of the parameter draw. It follows from the rule and the
+key shapes, and it says those libraries are out of scope by design rather than
+under-served.
 
-Episodes are worse off still. In `evidence/alpha` the episode's series carried
-**both** an IMDb and a TMDb ID, and Jellyfin emitted only the IMDb composite key —
-so an episode has no second key to corroborate with under any circumstances. A
-series without an IMDb ID contributes nothing recoverable, which is why the
-`episode_share = 1` sweep shows zero `insufficient_identity_evidence`: its
-episodes either match on IMDb or produce no candidate at all.
-
-## Result 3 — duplicates cost about what they weigh
+## Result 3 — duplicates and pre-existing state each subtract their own frequency
 
 | titles duplicated | 0 | 0.05 | 0.1 | 0.2 | 0.35 | 0.5 |
 |---|---|---|---|---|---|---|
-| recovered | 89.8% | 86.2% | 80.1% | 71.6% | 58.0% | 45.8% |
+| recovery | 91.3% | 86.8% | 82.0% | 72.9% | 59.6% | 47.3% |
 
-A second current item reporting the same provider key — another copy in a
-different library, or the old one still sitting at a vacated path mid-migration —
-makes the key ambiguous and the row is skipped. This is the one loss an operator
-can actually reduce: finish the move, let a full scan complete, then run.
+| current items already holding state | 0 | 0.25 | 0.5 | 0.75 | 1.0 |
+|---|---|---|---|---|---|
+| recovery | 91.3% | 68.5% | 45.6% | 22.7% | 0.0% |
+
+Duplicates make a key ambiguous; existing state is refused rather than overwritten
+(DESIGN §4.3). Note that item-weighted coverage stays at 91.5% down every column —
+these losses are invisible to any coverage measurement.
 
 ## Result 4 — move history is noise, not damage
 
 | moves per title | 1 | 2 | 3 | 5 | 8 |
 |---|---|---|---|---|---|
-| recovered | 89.8% | 90.9% | 89.4% | 90.6% | 90.3% |
-| dead GUID rows | 1,566 | 3,150 | 4,746 | 7,985 | 12,584 |
+| recovery | 91.3% | 91.3% | 91.3% | 91.3% | 91.3% |
+| dead GUID rows | 1,595 | 3,190 | 4,784 | 7,974 | 12,758 |
 
-A library that has been reorganised eight times recovers as well as one moved
-once. The GUID rows pile up linearly and every one of them is unmappable, so the
-raw `no_current_key_match` count looks alarming while meaning nothing. **Any
-headline ratio computed over rows rather than opportunities is dominated by this
-artifact** — worth knowing before reading anyone's summary block, including the
-ones in `evidence/alpha`.
+Identical to four decimal places, while unmappable rows grow linearly. **Any
+ratio computed over rows rather than opportunities is dominated by this
+artifact** — worth knowing before reading any summary block, including the ones
+in `evidence/alpha`.
 
-## Result 5 — existing state subtracts directly
+## Result 5 — long series widen the spread
 
-| current items already holding state | 0 | 0.25 | 0.5 | 0.75 | 1.0 |
+| mean episodes per series | 1 | 6 | 18 | 60 | 150 |
 |---|---|---|---|---|---|
-| recovered | 89.8% | 67.7% | 45.7% | 23.3% | 0.0% |
+| recovery (mean) | 90.1% | 90.5% | 91.3% | 91.0% | 92.9% |
+| spread across seeds | 86.8–92.4% | 87.9–94.6% | 83.0–95.4% | 77.2–97.6% | 79.2–97.8% |
 
-Refusing to overwrite (DESIGN §4.3) costs exactly its own frequency. On a server
-where the media moved and nobody watched anything since, this term is near zero;
-on one where people kept watching for months before anyone noticed, it dominates.
+The mean barely moves; the range roughly triples. A library of a few long-running
+shows is a far less predictable candidate than a library of many short ones at the
+same coverage, because a single missing series IMDb ID carries hundreds of
+episodes with it.
 
-## The model, tested rather than asserted
-
-The three losses look independent, so:
+## About the multiplicative relationship
 
 ```
-recovery ≈ imdbCoverage × (1 − duplication) × (1 − alreadyHasState)
+recovery = imdbCoverage × (1 − duplication) × (1 − alreadyHasState)
 ```
 
-Checked against four configurations the sweeps never visited:
+**This is the generator's expected result, not a finding.** Those three properties
+are drawn as independent events, so their effects necessarily compose this way.
+Presenting a run of the same generator as "held-out validation" of it — as an
+earlier version of this document did — is circular: it confirms only that the
+analyzer follows the assumptions the population was built from.
 
-| imdb | duplication | current state | predicted | actual | error |
+What the comparison is worth keeping for is narrower: it checks that the analyzer,
+the generator, and the arithmetic all agree, so an unexpected bend in a curve
+means a bug worth finding rather than noise.
+
+| imdb | duplication | current state | expected | simulated | delta |
 |---|---|---|---|---|---|
-| 0.70 | 0.20 | 0.30 | 39.2% | 40.9% | +1.7 |
-| 0.40 | 0.35 | 0.10 | 23.4% | 23.2% | −0.2 |
-| 0.95 | 0.05 | 0.50 | 45.1% | 46.4% | +1.3 |
-| 0.55 | 0.10 | 0.75 | 12.4% | 12.3% | −0.1 |
+| 0.70 | 0.20 | 0.30 | 39.2% | 40.3% | +1.1 |
+| 0.40 | 0.35 | 0.10 | 23.4% | 24.6% | +1.2 |
+| 0.95 | 0.05 | 0.50 | 45.1% | 45.4% | +0.3 |
+| 0.55 | 0.10 | 0.75 | 12.4% | 12.4% | 0.0 |
 
-Within two points across the range. Good enough to estimate a server's outcome
-from three numbers it can measure about itself.
+Real validation would require analyzer results from real installations. There are
+none yet.
 
 ## What this does and does not establish
 
-**Does:** that recovery is governed by IMDb coverage and nothing else of
-comparable weight; that TMDb-only libraries are unrecoverable by design, not by
-oversight; that move history does not degrade recovery; that row-level ratios are
-a misleading way to read any of this.
+**Does:** that TMDb-only libraries recover nothing under the current identity rule;
+that dead GUID rows scale with move count and make row-level ratios misleading;
+that duplicate current keys and pre-existing target state each reduce ready
+candidates roughly in proportion to their frequency; that identically-described
+libraries vary by tens of percentage points, and that the variation grows with
+series length.
 
-**Does not:** say where real installations sit on these curves. That is still an
-empirical question — but it is now a much smaller one, answerable by *"what
-fraction of your movies and series have an IMDb ID"* rather than by collecting
-full classification results. One or two real answers are enough to place a whole
-population.
+**Does not:** say where real installations sit on any of these curves, or that a
+single measured coverage number is enough to place one. Opportunity-weighted
+coverage is the predictive quantity; the item-weighted figure a server can easily
+measure only approximates it, and the approximation degrades exactly when viewing
+is concentrated in a few titles.
 
-The sweep also inherits every assumption in the stranding model. If Jellyfin
-strands rows differently than `evidence/alpha` observed — on another provider, or
-after an upstream change — these curves move with it.
+The simulation also inherits its stranding model from `evidence/alpha`. If Jellyfin
+strands rows differently — on another provider, or after an upstream change —
+these curves move with it.
 
-## A correction found while building this
+## Corrections made while building this
 
-The first version of the generator gave episodes a TMDb-derived composite key.
-Checking against the published plan showed Jellyfin emits only the IMDb composite
-even when the series has both IDs. The bug flattered TMDb-only TV libraries, which
-in reality recover nothing. Fixed before any figure here was recorded.
+Three, all of which flattered the results before they were fixed:
+
+1. **Ambiguity and no-match counts were read off the candidate totals**, where
+   they are always zero — those codes are row-level, since a row that matched
+   nothing never becomes a candidate.
+2. **Episodes were given a TMDb composite key.** The published plan shows Jellyfin
+   emits only the IMDb composite even when the series carries both IDs.
+3. **Removed items' GUIDs were drawn from the same identity space as live items**,
+   so some stranded "dead" rows matched a live item exactly and were counted as
+   recovered under §7.3 case 1. This put a 2% floor under libraries with no IMDb
+   coverage at all, pushed reported recovery above 100%, and made recovery appear
+   to *improve* with move count. Caught by the >100% figure; there is now a test
+   asserting no stranded GUID key matches a live item.
+
+The first two were fixed before any figure was published. The third was in the
+first published version of this document and its numbers are withdrawn.

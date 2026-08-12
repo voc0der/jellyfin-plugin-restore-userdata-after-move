@@ -161,31 +161,31 @@ results from disposable servers and consenting real backups. A high ambiguity or
 no-match rate is a legitimate result that ends the project at this milestone —
 it is not a signal to add fallback matching.
 
-**This is the open work**, but it is now a smaller question than it was.
-[`evidence/sweep/`](evidence/sweep/) maps how recovery responds to library shape,
-and the answer is dominated by one term:
+**This is the open work, and it still requires real installations.**
+[`evidence/sweep/`](evidence/sweep/) simulates the analyzer across library shapes.
+It establishes what the §7.3 rules imply for a library of a given description; it
+says nothing about how real libraries are described, and cannot. Four things from
+it bear on this review:
 
-```
-recovery ≈ imdbCoverage × (1 − duplication) × (1 − alreadyHasState)
-```
-
-validated to within two points on held-out configurations. So the ask of a real
-installation is no longer "send classification results" but *"what fraction of
-your movies and series carry an IMDb ID"* — one number, measurable without running
-anything. Two findings from the sweep bear directly on this review:
-
-- **A TMDb-only library recovers nothing at any coverage**, and no fallback fixes
-  that: a bare number is not identity evidence, and an episode never has a second
-  provider key to corroborate with. Those installations are out of scope by
-  design, not by omission.
+- **A TMDb-only library recovers nothing at any coverage.** A bare number is not
+  identity evidence, and an episode never carries a second provider key to
+  corroborate with. That follows from the rule, not from any parameter choice, and
+  it means those installations are out of scope by design rather than by omission.
 - **Row-level ratios are misleading.** Dead GUID rows accumulate linearly with
-  move count while contributing nothing, so `no_current_key_match` grows without
-  recovery falling at all. Judge on opportunities — `(user, title)` pairs that had
-  stranded state — not on rows.
+  move count while contributing nothing, so `no_current_key_match` grows while
+  recovery does not move at all. Judge on opportunities — `(user, item)` pairs that
+  had stranded state — never on rows.
+- **Identically-described libraries vary by tens of points**, and the variation
+  widens with series length, because IMDb coverage is a property of a *series* and
+  one missing ID takes every episode with it. A single summary is therefore a weak
+  signal; several are needed before any threshold is trusted.
+- **The measurable proxy is not the predictive quantity.** What predicts recovery
+  is opportunity-weighted coverage; what a server can easily count is
+  item-weighted. They diverge exactly when viewing is concentrated in a few
+  titles.
 
-Real summaries are still worth collecting, but as a check on the sweep's
-assumptions about duplication and pre-existing state rather than as the primary
-evidence.
+So the ask remains the `summary` block of a real plan, from installations with
+real history. The sweep narrows what to look at first, not what to collect.
 
 Ask each reviewer for the `summary` block of their plan — counts, no titles, no
 user IDs. Alongside the ratio itself, three diagnostics decide follow-up work:

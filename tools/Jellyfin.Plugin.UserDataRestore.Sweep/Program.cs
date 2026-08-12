@@ -7,21 +7,29 @@ namespace Jellyfin.Plugin.UserDataRestore.Sweep;
 
 /// <summary>
 /// Runs the analyzer across a range of library shapes and reports how recovery
-/// responds to each one (PLAN §2).
+/// responds to each (PLAN §2).
 /// </summary>
 /// <remarks>
-/// The output is deliberately a curve rather than a number. Any single synthetic
-/// library answers "what does the analyzer do on the library I invented", which
-/// is not the go/no-go question. A response surface answers "which libraries is
-/// this worth building the write path for", which a real installation can then
-/// check itself against by measuring its own provider coverage.
+/// <para>This is a simulation of the analyzer against a model of how Jellyfin
+/// strands rows. It establishes what the rules in DESIGN §7.3 imply for a library
+/// of a given shape. It is <b>not</b> evidence about how real libraries are
+/// shaped, and no arrangement of it could be.</para>
+/// <para>In particular, the multiplicative relationship it exhibits is a property
+/// of the generator: coverage, duplication and pre-existing state are drawn as
+/// independent events, so their effects compose. Reporting that as though the
+/// simulation had discovered it would be circular. What the comparison against the
+/// analytical expectation does establish is narrower and still worth having — that
+/// the analyzer, the generator, and the arithmetic all agree, so a curve that bends
+/// unexpectedly means something real rather than a bug.</para>
 /// </remarks>
 public static class Program
 {
-    // Two levels, and they are not interchangeable. A row that matched nothing or
-    // matched two things never becomes a candidate at all, so those codes only ever
-    // appear in the row counts; the codes below them are verdicts on a candidate
-    // that did form. Reading either off the wrong dictionary reports zero forever.
+    // Twenty populations per point. One seed cannot distinguish the effect being
+    // swept from the luck of which series drew an IMDb ID — and with coverage
+    // assigned per series, a single unlucky long-running show moves the rate by
+    // percentage points.
+    private const int SeedsPerPoint = 20;
+
     private static readonly ReasonCode[] CandidateCodes =
     [
         ReasonCode.Ready,
@@ -35,8 +43,6 @@ public static class Program
     [
         ReasonCode.AmbiguousCurrentKey,
         ReasonCode.NoCurrentKeyMatch,
-        ReasonCode.UnsupportedCurrentItem,
-        ReasonCode.PathOutsideFinalScope,
     ];
 
     /// <summary>
@@ -47,15 +53,13 @@ public static class Program
     {
         var csvPath = args is [var first, ..] ? first : "evidence/sweep/sweep.csv";
         var baseline = new LibraryShape();
-        var results = new List<SweepRow> { Run("baseline", "-", "-", baseline) };
+        var results = new List<SweepPoint> { Run("baseline", "-", "-", baseline) };
 
         foreach (var value in Fractions())
         {
             results.Add(Run("imdb_coverage", "imdbCoverage", value, baseline with { ImdbCoverage = value }));
         }
 
-        // With no IMDb anywhere, a movie's only provider key is a bare TMDb number
-        // and DESIGN §7.3 refuses it. This series exists to show what that costs.
         foreach (var value in Fractions())
         {
             results.Add(Run("tmdb_only", "tmdbCoverage", value, baseline with { ImdbCoverage = 0, TmdbCoverage = value }));
@@ -81,43 +85,16 @@ public static class Program
             results.Add(Run("episode_share", "episodeShare", value, baseline with { EpisodeShare = value }));
         }
 
+        // Series length drives how much watch history hangs off a single coverage
+        // draw, and therefore how far a run can sit from its own nominal coverage.
+        foreach (var value in new[] { 1.0, 6.0, 18.0, 60.0, 150.0 })
+        {
+            results.Add(Run("series_length", "meanEpisodesPerSeries", value, baseline with { MeanEpisodesPerSeries = value }));
+        }
+
         Write(csvPath, results);
         Print(results);
-        CheckModel();
-    }
-
-    // The one-at-a-time series suggest the three losses are independent and
-    // multiplicative. That is a claim, so it gets tested on configurations the
-    // series never visited rather than eyeballed off the curves.
-    private static void CheckModel()
-    {
-        LibraryShape[] held =
-        [
-            new() { ImdbCoverage = 0.7, Duplication = 0.2, CurrentStateFraction = 0.3 },
-            new() { ImdbCoverage = 0.4, Duplication = 0.35, CurrentStateFraction = 0.1 },
-            new() { ImdbCoverage = 0.95, Duplication = 0.05, CurrentStateFraction = 0.5 },
-            new() { ImdbCoverage = 0.55, Duplication = 0.1, CurrentStateFraction = 0.75, EpisodeShare = 0.2 },
-        ];
-
-        Console.WriteLine();
-        Console.WriteLine("Model: rate ~= imdbCoverage x (1 - duplication) x (1 - currentStateFraction)");
-        Console.WriteLine();
-        Console.WriteLine("| imdb | duplication | currentState | predicted | actual | error |");
-        Console.WriteLine("|---|---|---|---|---|---|");
-
-        foreach (var shape in held)
-        {
-            var predicted = shape.ImdbCoverage * (1 - shape.Duplication) * (1 - shape.CurrentStateFraction);
-            var actual = Run("model_check", "-", "-", shape).RecoveryRate;
-
-            Console.WriteLine(string.Join(" | ",
-                "| " + shape.ImdbCoverage.ToString("0.##", CultureInfo.InvariantCulture),
-                shape.Duplication.ToString("0.##", CultureInfo.InvariantCulture),
-                shape.CurrentStateFraction.ToString("0.##", CultureInfo.InvariantCulture),
-                predicted.ToString("P1", CultureInfo.InvariantCulture),
-                actual.ToString("P1", CultureInfo.InvariantCulture),
-                (actual - predicted).ToString("+0.0 %;-0.0 %;0.0 %", CultureInfo.InvariantCulture) + " |"));
-        }
+        CheckAgainstExpectation();
     }
 
     private static IEnumerable<double> Fractions()
@@ -128,7 +105,31 @@ public static class Program
         }
     }
 
-    private static SweepRow Run(string series, string parameter, object value, LibraryShape shape)
+    private static SweepPoint Run(string series, string parameter, object value, LibraryShape shape)
+    {
+        var runs = new List<RunOutcome>(SeedsPerPoint);
+
+        for (var seed = 1; seed <= SeedsPerPoint; seed++)
+        {
+            runs.Add(RunOnce(shape with { Seed = seed }));
+        }
+
+        return new SweepPoint(
+            series,
+            parameter,
+            Format(value),
+            runs.Count,
+            (int)runs.Average(run => run.Opportunities),
+            runs.Average(run => run.RecoveryRate),
+            runs.Min(run => run.RecoveryRate),
+            runs.Max(run => run.RecoveryRate),
+            runs.Average(run => run.OpportunityWeightedImdb),
+            runs.Average(run => run.ItemWeightedImdb),
+            CandidateCodes.ToDictionary(code => code, code => runs.Average(run => run.ByCandidate[code])),
+            RowCodes.ToDictionary(code => code, code => runs.Average(run => run.ByRow[code])));
+    }
+
+    private static RunOutcome RunOnce(LibraryShape shape)
     {
         var population = PopulationGenerator.Generate(shape);
 
@@ -141,19 +142,25 @@ public static class Program
         });
 
         var result = DetachedUserDataAnalyzer.Complete(candidates, population.CurrentRows);
-        var byCandidate = CandidateCodes.ToDictionary(code => code, code => result.CandidateCounts.GetValueOrDefault(code));
-        var byRow = RowCodes.ToDictionary(code => code, code => result.RowCounts.GetValueOrDefault(code));
+        var byCandidate = CandidateCodes.ToDictionary(code => code, code => (double)result.CandidateCounts.GetValueOrDefault(code));
+        var byRow = RowCodes.ToDictionary(code => code, code => (double)result.RowCounts.GetValueOrDefault(code));
 
-        // Opportunities, not candidates, is the honest denominator: state that was
-        // stranded and never produced a candidate at all — because every key it had
-        // was a dead GUID — is exactly the loss the go/no-go is asking about.
+        // Opportunities, not candidates: state that never produced a candidate at
+        // all — because every key it had was a dead GUID — is exactly the loss
+        // being measured.
         var ready = byCandidate[ReasonCode.Ready];
-        var rate = population.Opportunities == 0 ? 0 : (double)ready / population.Opportunities;
+        var rate = population.Opportunities == 0 ? 0 : ready / population.Opportunities;
 
-        return new SweepRow(series, parameter, Format(value), population.Opportunities, byCandidate, byRow, rate);
+        return new RunOutcome(
+            population.Opportunities,
+            rate,
+            population.OpportunityWeightedImdbCoverage,
+            population.ItemWeightedImdbCoverage,
+            byCandidate,
+            byRow);
     }
 
-    private static void Write(string path, IReadOnlyList<SweepRow> rows)
+    private static void Write(string path, IReadOnlyList<SweepPoint> points)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
@@ -162,7 +169,9 @@ public static class Program
         }
 
         var csv = new StringBuilder();
-        csv.Append("series,parameter,value,opportunities,recoveryRate");
+        csv.Append("series,parameter,value,seeds,opportunities,recoveryMean,recoveryMin,recoveryMax,")
+           .Append("opportunityWeightedImdbCoverage,itemWeightedImdbCoverage");
+
         foreach (var code in CandidateCodes)
         {
             csv.Append(",candidates.").Append(ReasonCodes.ToWire(code));
@@ -175,51 +184,94 @@ public static class Program
 
         csv.AppendLine();
 
-        foreach (var row in rows)
+        foreach (var point in points)
         {
-            csv.Append(row.Series).Append(',')
-               .Append(row.Parameter).Append(',')
-               .Append(row.Value).Append(',')
-               .Append(row.Opportunities.ToString(CultureInfo.InvariantCulture)).Append(',')
-               .Append(row.RecoveryRate.ToString("F4", CultureInfo.InvariantCulture));
+            csv.Append(point.Series).Append(',')
+               .Append(point.Parameter).Append(',')
+               .Append(point.Value).Append(',')
+               .Append(point.Seeds.ToString(CultureInfo.InvariantCulture)).Append(',')
+               .Append(point.Opportunities.ToString(CultureInfo.InvariantCulture)).Append(',')
+               .Append(F(point.RecoveryMean)).Append(',')
+               .Append(F(point.RecoveryMin)).Append(',')
+               .Append(F(point.RecoveryMax)).Append(',')
+               .Append(F(point.OpportunityWeightedImdb)).Append(',')
+               .Append(F(point.ItemWeightedImdb));
 
             foreach (var code in CandidateCodes)
             {
-                csv.Append(',').Append(row.ByCandidate[code].ToString(CultureInfo.InvariantCulture));
+                csv.Append(',').Append(point.ByCandidate[code].ToString("F1", CultureInfo.InvariantCulture));
             }
 
             foreach (var code in RowCodes)
             {
-                csv.Append(',').Append(row.ByRow[code].ToString(CultureInfo.InvariantCulture));
+                csv.Append(',').Append(point.ByRow[code].ToString("F1", CultureInfo.InvariantCulture));
             }
 
             csv.AppendLine();
         }
 
         File.WriteAllText(path, csv.ToString());
-        Console.WriteLine("Wrote " + path);
+        Console.WriteLine("Wrote " + path + " (" + points.Count + " points x " + SeedsPerPoint + " seeds)");
     }
 
-    private static void Print(IReadOnlyList<SweepRow> rows)
+    private static void Print(IReadOnlyList<SweepPoint> points)
     {
         Console.WriteLine();
-        Console.WriteLine("| series | value | opportunities | recovered | rate | insufficient | conflict | ambiguous rows | dead-guid rows |");
-        Console.WriteLine("|---|---|---|---|---|---|---|---|---|");
+        Console.WriteLine("| series | value | opportunities | recovery (mean) | range over 20 seeds | imdb: opportunity-weighted | imdb: item-weighted |");
+        Console.WriteLine("|---|---|---|---|---|---|---|");
 
-        foreach (var row in rows)
+        foreach (var point in points)
         {
             Console.WriteLine(string.Join(" | ",
-                "| " + row.Series,
-                row.Value,
-                row.Opportunities.ToString(CultureInfo.InvariantCulture),
-                row.ByCandidate[ReasonCode.Ready].ToString(CultureInfo.InvariantCulture),
-                row.RecoveryRate.ToString("P1", CultureInfo.InvariantCulture),
-                row.ByCandidate[ReasonCode.InsufficientIdentityEvidence].ToString(CultureInfo.InvariantCulture),
-                row.ByCandidate[ReasonCode.CurrentStateConflict].ToString(CultureInfo.InvariantCulture),
-                row.ByRow[ReasonCode.AmbiguousCurrentKey].ToString(CultureInfo.InvariantCulture),
-                row.ByRow[ReasonCode.NoCurrentKeyMatch].ToString(CultureInfo.InvariantCulture) + " |"));
+                "| " + point.Series,
+                point.Value,
+                point.Opportunities.ToString(CultureInfo.InvariantCulture),
+                point.RecoveryMean.ToString("P1", CultureInfo.InvariantCulture),
+                point.RecoveryMin.ToString("P1", CultureInfo.InvariantCulture) + " – " + point.RecoveryMax.ToString("P1", CultureInfo.InvariantCulture),
+                point.OpportunityWeightedImdb.ToString("P1", CultureInfo.InvariantCulture),
+                point.ItemWeightedImdb.ToString("P1", CultureInfo.InvariantCulture) + " |"));
         }
     }
+
+    // Not a validation of the model against reality — it cannot be, since both
+    // sides come from the same assumptions. It checks that the analyzer and the
+    // generator agree with the arithmetic those assumptions imply, which is what
+    // makes an unexpected bend in a curve worth investigating.
+    private static void CheckAgainstExpectation()
+    {
+        LibraryShape[] cases =
+        [
+            new() { ImdbCoverage = 0.7, Duplication = 0.2, CurrentStateFraction = 0.3 },
+            new() { ImdbCoverage = 0.4, Duplication = 0.35, CurrentStateFraction = 0.1 },
+            new() { ImdbCoverage = 0.95, Duplication = 0.05, CurrentStateFraction = 0.5 },
+            new() { ImdbCoverage = 0.55, Duplication = 0.1, CurrentStateFraction = 0.75, EpisodeShare = 0.2 },
+        ];
+
+        Console.WriteLine();
+        Console.WriteLine("Self-consistency: simulated rate vs the generator's own expectation");
+        Console.WriteLine("(both sides assume independence; this is not evidence about real libraries)");
+        Console.WriteLine();
+        Console.WriteLine("| imdb | duplication | currentState | expected | simulated | delta |");
+        Console.WriteLine("|---|---|---|---|---|---|");
+
+        foreach (var shape in cases)
+        {
+            var expected = shape.ImdbCoverage * (1 - shape.Duplication) * (1 - shape.CurrentStateFraction);
+            var simulated = Enumerable.Range(1, SeedsPerPoint)
+                .Select(seed => RunOnce(shape with { Seed = seed }).RecoveryRate)
+                .Average();
+
+            Console.WriteLine(string.Join(" | ",
+                "| " + shape.ImdbCoverage.ToString("0.##", CultureInfo.InvariantCulture),
+                shape.Duplication.ToString("0.##", CultureInfo.InvariantCulture),
+                shape.CurrentStateFraction.ToString("0.##", CultureInfo.InvariantCulture),
+                expected.ToString("P1", CultureInfo.InvariantCulture),
+                simulated.ToString("P1", CultureInfo.InvariantCulture),
+                (simulated - expected).ToString("+0.0 %;-0.0 %;0.0 %", CultureInfo.InvariantCulture) + " |"));
+        }
+    }
+
+    private static string F(double value) => value.ToString("F4", CultureInfo.InvariantCulture);
 
     private static string Format(object value) => value switch
     {
@@ -228,12 +280,25 @@ public static class Program
         _ => value.ToString() ?? "-",
     };
 
-    private sealed record SweepRow(
+    private sealed record RunOutcome(
+        int Opportunities,
+        double RecoveryRate,
+        double OpportunityWeightedImdb,
+        double ItemWeightedImdb,
+        IReadOnlyDictionary<ReasonCode, double> ByCandidate,
+        IReadOnlyDictionary<ReasonCode, double> ByRow);
+
+    private sealed record SweepPoint(
         string Series,
         string Parameter,
         string Value,
+        int Seeds,
         int Opportunities,
-        IReadOnlyDictionary<ReasonCode, int> ByCandidate,
-        IReadOnlyDictionary<ReasonCode, int> ByRow,
-        double RecoveryRate);
+        double RecoveryMean,
+        double RecoveryMin,
+        double RecoveryMax,
+        double OpportunityWeightedImdb,
+        double ItemWeightedImdb,
+        IReadOnlyDictionary<ReasonCode, double> ByCandidate,
+        IReadOnlyDictionary<ReasonCode, double> ByRow);
 }

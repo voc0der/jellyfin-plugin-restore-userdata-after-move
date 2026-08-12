@@ -9,26 +9,46 @@ namespace Jellyfin.Plugin.UserDataRestore.Sweep;
 /// <param name="DetachedRows">The sentinel rows a path change left behind.</param>
 /// <param name="CurrentRows">Live user-data rows on the current items.</param>
 /// <param name="UserIds">The surviving users.</param>
-/// <param name="Opportunities">
-/// The number of (user, title) pairs that had stranded state — the denominator
-/// the recovery rate is measured against.
+/// <param name="Opportunities">(user, item) pairs that had stranded state.</param>
+/// <param name="OpportunitiesWithImdbKey">
+/// Of those, the ones whose current item exposes an IMDb-derived key — the
+/// coverage figure that actually predicts recovery.
 /// </param>
+/// <param name="CatalogItems">Current items in the configured libraries.</param>
+/// <param name="CatalogItemsWithImdbKey">Of those, the ones exposing an IMDb-derived key.</param>
 public sealed record Population(
     IReadOnlyList<CurrentItemSnapshot> Items,
     IReadOnlyList<DetachedUserDataRow> DetachedRows,
     IReadOnlyList<CurrentUserDataRow> CurrentRows,
     IReadOnlySet<Guid> UserIds,
-    int Opportunities);
+    int Opportunities,
+    int OpportunitiesWithImdbKey,
+    int CatalogItems,
+    int CatalogItemsWithImdbKey)
+{
+    /// <summary>Gets IMDb coverage weighted by stranded state, the predictive measure.</summary>
+    public double OpportunityWeightedImdbCoverage =>
+        Opportunities == 0 ? 0 : (double)OpportunitiesWithImdbKey / Opportunities;
+
+    /// <summary>Gets IMDb coverage weighted by catalog item, the measurable proxy.</summary>
+    public double ItemWeightedImdbCoverage =>
+        CatalogItems == 0 ? 0 : (double)CatalogItemsWithImdbKey / CatalogItems;
+}
 
 /// <summary>
 /// Builds a synthetic installation from a <see cref="LibraryShape"/>.
 /// </summary>
 /// <remarks>
-/// The keys are the ones Jellyfin itself produces, in the order it produces them:
-/// a movie reports IMDb, then a bare TMDb number, then its own GUID; an episode
-/// reports the series' provider ID with zero-padded season and episode appended,
-/// then its own GUID. Nothing here invents a key shape the live runs did not show
-/// (DESIGN §17.4).
+/// <para>Keys are the ones Jellyfin emits, in the order it emits them: a movie
+/// reports IMDb, a bare TMDb number, then its own GUID; an episode reports the
+/// <em>series'</em> IMDb ID with zero-padded season and episode, then its own
+/// GUID. In <c>evidence/alpha</c> the episode's series carried both an IMDb and a
+/// TMDb ID and Jellyfin still emitted only the IMDb composite, so an episode
+/// never has a second provider key to corroborate with.</para>
+/// <para>Series are real entities here: coverage is drawn once per series and
+/// inherited by all of its episodes, and series lengths vary. That coupling is the
+/// point — it is what makes catalog-level coverage an unreliable predictor of how
+/// much watch history comes back.</para>
 /// </remarks>
 public static class PopulationGenerator
 {
@@ -37,6 +57,8 @@ public static class PopulationGenerator
 
     /// <summary>A library the operator did not configure, where duplicates live.</summary>
     public static readonly Guid UnconfiguredLibrary = new("22222222-2222-2222-2222-222222222222");
+
+    private const int EpisodesPerSeason = 13;
 
     private static readonly DateTime Retention = new(2026, 8, 12, 14, 22, 9, DateTimeKind.Utc);
     private static readonly DateTime LastPlayed = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
@@ -50,89 +72,14 @@ public static class PopulationGenerator
     {
         ArgumentNullException.ThrowIfNull(shape);
 
-        var random = new Random(shape.Seed);
-        var items = new List<CurrentItemSnapshot>();
-        var detached = new List<DetachedUserDataRow>();
-        var current = new List<CurrentUserDataRow>();
-        var users = Enumerable.Range(0, shape.Users).Select(NthUser).ToArray();
-        var opportunities = 0;
-
-        for (var t = 0; t < shape.Titles; t++)
-        {
-            var isEpisode = random.NextDouble() < shape.EpisodeShare;
-            var imdb = random.NextDouble() < shape.ImdbCoverage ? Imdb(t) : null;
-            var tmdb = random.NextDouble() < shape.TmdbCoverage ? Tmdb(t) : null;
-            var itemId = NextGuid(random);
-
-            var item = isEpisode
-                ? Episode(itemId, NextGuid(random), imdb, tmdb, t)
-                : Movie(itemId, imdb, tmdb, t);
-
-            items.Add(item);
-
-            // A second current item reporting the same provider keys: another copy
-            // in an unconfigured library, or the old one still sitting at a vacated
-            // path mid-migration. Either way the key stops being unique.
-            if (random.NextDouble() < shape.Duplication)
-            {
-                var twinId = NextGuid(random);
-                items.Add(isEpisode
-                    ? Episode(twinId, NextGuid(random), imdb, tmdb, t, UnconfiguredLibrary)
-                    : Movie(twinId, imdb, tmdb, t, UnconfiguredLibrary));
-            }
-
-            // The provider keys survive a move unchanged, because the provider IDs
-            // do. These are the only keys that can ever match.
-            var providerKeys = ProviderKeys(item, isEpisode);
-
-            foreach (var user in users)
-            {
-                if (random.NextDouble() >= shape.WatchedFraction)
-                {
-                    continue;
-                }
-
-                opportunities++;
-
-                // One row per provider key, all holding the same snapshot: what
-                // §17.5 observed, and what lets two bare keys corroborate.
-                foreach (var key in providerKeys)
-                {
-                    detached.Add(StrandedRow(user, key));
-                }
-
-                // Every removed item leaves its own GUID key behind. No current item
-                // reports it, so these are unmappable by construction — they are in
-                // the population because they are in real databases.
-                for (var move = 0; move < shape.MovesPerTitle; move++)
-                {
-                    detached.Add(StrandedRow(user, NextGuid(random).ToString("D", CultureInfo.InvariantCulture)));
-                }
-
-                if (random.NextDouble() < shape.CurrentStateFraction)
-                {
-                    current.Add(new CurrentUserDataRow
-                    {
-                        UserId = user,
-                        ItemId = item.ItemId,
-                        CustomDataKey = providerKeys.Count > 0 ? providerKeys[0] : item.ItemId.ToString("D", CultureInfo.InvariantCulture),
-                        Played = false,
-                        PlayCount = 1,
-                        PlaybackPositionTicks = 999,
-                        IsFavorite = false,
-                        LastPlayedDate = LastPlayed.AddDays(1),
-                        Rating = 4,
-                    });
-                }
-            }
-        }
-
-        return new Population(items, detached, current, users.ToHashSet(), opportunities);
+        var builder = new Builder(shape);
+        builder.AddMovies();
+        builder.AddSeries();
+        return builder.Build();
     }
 
     /// <summary>
-    /// The scope the analyzer runs under. Both roots are configured, so nothing is
-    /// excluded for being out of scope; the sweep is about matching, not scoping.
+    /// The scope the analyzer runs under.
     /// </summary>
     /// <returns>The analysis options.</returns>
     public static AnalysisOptions Options() => new()
@@ -144,136 +91,266 @@ public static class PopulationGenerator
         NowUtc = new DateTime(2026, 8, 12, 0, 0, 0, DateTimeKind.Utc),
     };
 
-    private static IReadOnlyList<string> ProviderKeys(CurrentItemSnapshot item, bool isEpisode)
+    private static string Imdb(Deterministic.Kind kind, int index) =>
+        "tt" + ((int)kind).ToString(CultureInfo.InvariantCulture) + index.ToString("0000000", CultureInfo.InvariantCulture);
+
+    // Bare, with no provider namespace, exactly as Jellyfin stores it.
+    private static string Tmdb(Deterministic.Kind kind, int index) =>
+        (((int)kind * 10_000_000) + 500_000 + index).ToString(CultureInfo.InvariantCulture);
+
+    private sealed class Builder(LibraryShape shape)
     {
-        var suffix = isEpisode
-            ? (item.SeasonNumber ?? 0).ToString("000", CultureInfo.InvariantCulture)
-                + (item.EpisodeNumber ?? 0).ToString("000", CultureInfo.InvariantCulture)
-            : string.Empty;
+        private readonly List<CurrentItemSnapshot> _items = [];
+        private readonly List<DetachedUserDataRow> _detached = [];
+        private readonly List<CurrentUserDataRow> _current = [];
+        private readonly Guid[] _users = [.. Enumerable.Range(0, shape.Users).Select(NthUser)];
 
-        var providers = isEpisode ? item.SeriesProviderIds : item.ProviderIds;
-        var keys = new List<string>();
+        private int _opportunities;
+        private int _opportunitiesWithImdb;
+        private int _catalogItems;
+        private int _catalogItemsWithImdb;
+        private int _removedItems;
+        private int _duplicates;
 
-        if (providers.TryGetValue("Imdb", out var imdb))
+        public void AddMovies()
         {
-            keys.Add(imdb + suffix);
+            var count = (int)Math.Round(shape.Titles * (1 - shape.EpisodeShare));
+
+            for (var index = 0; index < count; index++)
+            {
+                var imdb = Draw(Deterministic.Kind.Movie, index, Deterministic.Slot.Imdb) < shape.ImdbCoverage
+                    ? Imdb(Deterministic.Kind.Movie, index)
+                    : null;
+                var tmdb = Draw(Deterministic.Kind.Movie, index, Deterministic.Slot.Tmdb) < shape.TmdbCoverage
+                    ? Tmdb(Deterministic.Kind.Movie, index)
+                    : null;
+
+                var itemId = Deterministic.Identity(shape.Seed, Deterministic.Kind.Movie, index);
+                var providers = Providers(imdb, tmdb);
+                var keys = new List<string>();
+
+                if (imdb is not null)
+                {
+                    keys.Add(imdb);
+                }
+
+                if (tmdb is not null)
+                {
+                    keys.Add(tmdb);
+                }
+
+                var item = new CurrentItemSnapshot
+                {
+                    ItemId = itemId,
+                    Kind = ItemKind.Movie,
+                    Name = "Movie " + index.ToString(CultureInfo.InvariantCulture),
+                    Path = "/data/movies/Movie " + index.ToString(CultureInfo.InvariantCulture) + "/movie.mkv",
+                    PathExists = true,
+                    LibraryIds = [ConfiguredLibrary],
+                    UserDataKeys = [.. keys, itemId.ToString("D", CultureInfo.InvariantCulture)],
+                    ProviderIds = providers,
+                };
+
+                Place(item, keys, imdb is not null, Deterministic.Kind.Movie, index, providers, null);
+            }
         }
 
-        // Movies only. In evidence/alpha the episode's series carried both an IMDb
-        // and a TMDb ID, and Jellyfin still emitted exactly one provider key — the
-        // IMDb composite. An episode therefore has no second key to corroborate
-        // with, which is why DESIGN §7.3 case 3 can never rescue a series that
-        // lacks an IMDb ID.
-        if (!isEpisode && providers.TryGetValue("Tmdb", out var tmdb))
+        public void AddSeries()
         {
-            keys.Add(tmdb);
+            var target = (int)Math.Round(shape.Titles * shape.EpisodeShare);
+            var produced = 0;
+
+            for (var series = 0; produced < target; series++)
+            {
+                var episodeCount = EpisodeCount(series);
+                var imdb = Draw(Deterministic.Kind.Series, series, Deterministic.Slot.Imdb) < shape.ImdbCoverage
+                    ? Imdb(Deterministic.Kind.Series, series)
+                    : null;
+                var tmdb = Draw(Deterministic.Kind.Series, series, Deterministic.Slot.Tmdb) < shape.TmdbCoverage
+                    ? Tmdb(Deterministic.Kind.Series, series)
+                    : null;
+
+                var seriesId = Deterministic.Identity(shape.Seed, Deterministic.Kind.Series, series);
+                var providers = Providers(imdb, tmdb);
+
+                for (var episode = 0; episode < episodeCount && produced < target; episode++, produced++)
+                {
+                    var season = 1 + (episode / EpisodesPerSeason);
+                    var number = 1 + (episode % EpisodesPerSeason);
+                    var suffix = season.ToString("000", CultureInfo.InvariantCulture)
+                        + number.ToString("000", CultureInfo.InvariantCulture);
+
+                    // The series' ID, inherited. This is the coupling that matters:
+                    // one absent series IMDb takes every episode with it.
+                    var keys = imdb is null ? new List<string>() : [imdb + suffix];
+                    var itemId = Deterministic.Identity(shape.Seed, Deterministic.Kind.Episode, series, episode);
+
+                    var item = new CurrentItemSnapshot
+                    {
+                        ItemId = itemId,
+                        Kind = ItemKind.Episode,
+                        Name = "S" + season.ToString(CultureInfo.InvariantCulture) + "E" + number.ToString(CultureInfo.InvariantCulture),
+                        Path = "/data/tv/Show " + series.ToString(CultureInfo.InvariantCulture) + "/episode.mkv",
+                        PathExists = true,
+                        LibraryIds = [ConfiguredLibrary],
+                        UserDataKeys = [.. keys, itemId.ToString("D", CultureInfo.InvariantCulture)],
+                        ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                        SeriesProviderIds = providers,
+                        SeriesId = seriesId,
+                        SeasonNumber = season,
+                        EpisodeNumber = number,
+                    };
+
+                    Place(item, keys, imdb is not null, Deterministic.Kind.Episode, series, providers, episode);
+                }
+            }
         }
 
-        return keys;
-    }
+        public Population Build() => new(
+            _items,
+            _detached,
+            _current,
+            _users.ToHashSet(),
+            _opportunities,
+            _opportunitiesWithImdb,
+            _catalogItems,
+            _catalogItemsWithImdb);
 
-    private static CurrentItemSnapshot Movie(Guid id, string? imdb, string? tmdb, int index, Guid? library = null)
-    {
-        var providers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var keys = new List<string>();
-
-        if (imdb is not null)
+        private static Guid NthUser(int index)
         {
-            providers["Imdb"] = imdb;
-            keys.Add(imdb);
+            var bytes = new byte[16];
+            bytes[0] = (byte)(index + 1);
+            bytes[15] = 0xAA;
+            return new Guid(bytes);
         }
 
-        if (tmdb is not null)
+        private static Dictionary<string, string> Providers(string? imdb, string? tmdb)
         {
-            providers["Tmdb"] = tmdb;
-            keys.Add(tmdb);
+            var providers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (imdb is not null)
+            {
+                providers["Imdb"] = imdb;
+            }
+
+            if (tmdb is not null)
+            {
+                providers["Tmdb"] = tmdb;
+            }
+
+            return providers;
         }
 
-        keys.Add(id.ToString("D", CultureInfo.InvariantCulture));
+        private double Draw(Deterministic.Kind kind, int index, Deterministic.Slot slot, int sub = 0) =>
+            Deterministic.NextDouble(shape.Seed, kind, index, slot, sub);
 
-        return new CurrentItemSnapshot
+        // Geometric, so lengths vary the way real catalogs do: many short series,
+        // a few very long ones. Uniform lengths would understate how much recovery
+        // rides on a small number of coverage draws.
+        private int EpisodeCount(int series)
         {
-            ItemId = id,
-            Kind = ItemKind.Movie,
-            Name = "Movie " + index.ToString(CultureInfo.InvariantCulture),
-            Path = "/data/movies/Movie " + index.ToString(CultureInfo.InvariantCulture) + "/movie.mkv",
-            PathExists = true,
-            LibraryIds = [library ?? ConfiguredLibrary],
-            UserDataKeys = keys,
-            ProviderIds = providers,
+            var mean = Math.Max(1, shape.MeanEpisodesPerSeries);
+            var u = Math.Clamp(Draw(Deterministic.Kind.Series, series, Deterministic.Slot.EpisodeCount), 1e-9, 1 - 1e-9);
+            return Math.Clamp((int)Math.Ceiling(-mean * Math.Log(1 - u)), 1, 400);
+        }
+
+        private void Place(
+            CurrentItemSnapshot item,
+            IReadOnlyList<string> providerKeys,
+            bool hasImdbKey,
+            Deterministic.Kind kind,
+            int index,
+            IReadOnlyDictionary<string, string> providers,
+            int? sub)
+        {
+            _items.Add(item);
+            _catalogItems++;
+            if (hasImdbKey)
+            {
+                _catalogItemsWithImdb++;
+            }
+
+            var episodeSub = sub ?? 0;
+
+            if (Draw(kind, index, Deterministic.Slot.Duplicate, episodeSub) < shape.Duplication)
+            {
+                _items.Add(Twin(item, providers));
+            }
+
+            for (var user = 0; user < _users.Length; user++)
+            {
+                if (Draw(kind, index, Deterministic.Slot.Watched, (episodeSub * 64) + user) >= shape.WatchedFraction)
+                {
+                    continue;
+                }
+
+                _opportunities++;
+                if (hasImdbKey)
+                {
+                    _opportunitiesWithImdb++;
+                }
+
+                foreach (var key in providerKeys)
+                {
+                    _detached.Add(StrandedRow(_users[user], key));
+                }
+
+                // Every removed item leaves its own GUID key behind, unmappable by
+                // construction. Drawn from its own identity space and a counter no
+                // live item shares: a collision with a live GUID would satisfy
+                // §7.3 case 1 and be counted as a recovery.
+                for (var move = 0; move < shape.MovesPerTitle; move++)
+                {
+                    var dead = Deterministic.Identity(shape.Seed, Deterministic.Kind.RemovedItem, _removedItems++);
+                    _detached.Add(StrandedRow(_users[user], dead.ToString("D", CultureInfo.InvariantCulture)));
+                }
+
+                if (Draw(kind, index, Deterministic.Slot.CurrentState, (episodeSub * 64) + user) < shape.CurrentStateFraction)
+                {
+                    _current.Add(new CurrentUserDataRow
+                    {
+                        UserId = _users[user],
+                        ItemId = item.ItemId,
+                        CustomDataKey = providerKeys.Count > 0
+                            ? providerKeys[0]
+                            : item.ItemId.ToString("D", CultureInfo.InvariantCulture),
+                        Played = false,
+                        PlayCount = 1,
+                        PlaybackPositionTicks = 999,
+                        IsFavorite = false,
+                        LastPlayedDate = LastPlayed.AddDays(1),
+                        Rating = 4,
+                    });
+                }
+            }
+        }
+
+        private CurrentItemSnapshot Twin(CurrentItemSnapshot item, IReadOnlyDictionary<string, string> providers)
+        {
+            var twinId = Deterministic.Identity(shape.Seed, Deterministic.Kind.Duplicate, _duplicates++);
+
+            return item with
+            {
+                ItemId = twinId,
+                LibraryIds = [UnconfiguredLibrary],
+                Path = "/data/other/copy.mkv",
+                UserDataKeys = [.. item.UserDataKeys
+                    .Where(key => !key.Equals(item.ItemId.ToString("D", CultureInfo.InvariantCulture), StringComparison.Ordinal)),
+                    twinId.ToString("D", CultureInfo.InvariantCulture)],
+                ProviderIds = item.Kind == ItemKind.Movie ? providers : item.ProviderIds,
+            };
+        }
+
+        private DetachedUserDataRow StrandedRow(Guid user, string key) => new()
+        {
+            UserId = user,
+            CustomDataKey = key,
+            Played = true,
+            PlayCount = 3,
+            PlaybackPositionTicks = 12345,
+            IsFavorite = true,
+            LastPlayedDate = LastPlayed,
+            Rating = 9,
+            RetentionDate = Retention,
         };
-    }
-
-    private static CurrentItemSnapshot Episode(Guid id, Guid seriesId, string? imdb, string? tmdb, int index, Guid? library = null)
-    {
-        var providers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var season = 1 + (index % 5);
-        var episode = 1 + (index % 13);
-        var suffix = season.ToString("000", CultureInfo.InvariantCulture) + episode.ToString("000", CultureInfo.InvariantCulture);
-        var keys = new List<string>();
-
-        if (imdb is not null)
-        {
-            providers["Imdb"] = imdb;
-            keys.Add(imdb + suffix);
-        }
-
-        // Recorded on the series, but it produces no key: see ProviderKeys.
-        if (tmdb is not null)
-        {
-            providers["Tmdb"] = tmdb;
-        }
-
-        keys.Add(id.ToString("D", CultureInfo.InvariantCulture));
-
-        return new CurrentItemSnapshot
-        {
-            ItemId = id,
-            Kind = ItemKind.Episode,
-            Name = "Episode " + index.ToString(CultureInfo.InvariantCulture),
-            Path = "/data/tv/Show " + index.ToString(CultureInfo.InvariantCulture) + "/S01E01.mkv",
-            PathExists = true,
-            LibraryIds = [library ?? ConfiguredLibrary],
-            UserDataKeys = keys,
-            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-            SeriesProviderIds = providers,
-            SeriesId = seriesId,
-            SeasonNumber = season,
-            EpisodeNumber = episode,
-        };
-    }
-
-    private static DetachedUserDataRow StrandedRow(Guid user, string key) => new()
-    {
-        UserId = user,
-        CustomDataKey = key,
-        Played = true,
-        PlayCount = 3,
-        PlaybackPositionTicks = 12345,
-        IsFavorite = true,
-        LastPlayedDate = LastPlayed,
-        Rating = 9,
-        RetentionDate = Retention,
-    };
-
-    private static string Imdb(int index) => "tt" + index.ToString("0000000", CultureInfo.InvariantCulture);
-
-    // Bare, with no provider namespace, exactly as Jellyfin stores it. Offset well
-    // clear of the IMDb digits so a TMDb key can never collide with one.
-    private static string Tmdb(int index) => (500000 + index).ToString(CultureInfo.InvariantCulture);
-
-    private static Guid NthUser(int index)
-    {
-        var bytes = new byte[16];
-        bytes[0] = (byte)(index + 1);
-        bytes[15] = 0xAA;
-        return new Guid(bytes);
-    }
-
-    private static Guid NextGuid(Random random)
-    {
-        var bytes = new byte[16];
-        random.NextBytes(bytes);
-        return new Guid(bytes);
     }
 }
