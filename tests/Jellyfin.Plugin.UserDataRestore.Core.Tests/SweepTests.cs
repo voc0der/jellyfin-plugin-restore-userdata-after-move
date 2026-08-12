@@ -87,6 +87,30 @@ public class SweepTests
         Assert.True(lengths.Max() > lengths.Min() * 2, "series lengths should span a wide range");
     }
 
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(6.0)]
+    [InlineData(18.0)]
+    [InlineData(60.0)]
+    public void SeriesLengthsHaveTheConfiguredMean(double configured)
+    {
+        // The series-length curve is plotted against this number, so it has to be
+        // the number. An earlier sampler rounded a continuous exponential up and
+        // capped at 400: a configured 1 produced 1.57 and a configured 150
+        // produced 133.
+        var realized = Enumerable.Range(1, 12)
+            .Select(seed => PopulationGenerator.Generate(new LibraryShape
+            {
+                Titles = 4000,
+                EpisodeShare = 1,
+                MeanEpisodesPerSeries = configured,
+                Seed = seed,
+            }).RealizedEpisodesPerSeries)
+            .Average();
+
+        Assert.InRange(realized, configured * 0.9, configured * 1.1);
+    }
+
     [Fact]
     public void NoStrandedGuidKeyMatchesALiveItem()
     {

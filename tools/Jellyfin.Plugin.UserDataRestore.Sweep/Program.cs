@@ -114,17 +114,24 @@ public static class Program
             runs.Add(RunOnce(shape with { Seed = seed }));
         }
 
+        // Pooled, not the mean of per-seed rates: populations differ slightly in
+        // size, and every opportunity should carry the same weight regardless of
+        // which run it landed in.
+        var totalOpportunities = runs.Sum(run => (long)run.Opportunities);
+        var totalReady = runs.Sum(run => run.ByCandidate[ReasonCode.Ready]);
+
         return new SweepPoint(
             series,
             parameter,
             Format(value),
             runs.Count,
             (int)runs.Average(run => run.Opportunities),
-            runs.Average(run => run.RecoveryRate),
+            totalOpportunities == 0 ? 0 : totalReady / totalOpportunities,
             runs.Min(run => run.RecoveryRate),
             runs.Max(run => run.RecoveryRate),
-            runs.Average(run => run.OpportunityWeightedImdb),
-            runs.Average(run => run.ItemWeightedImdb),
+            runs.Sum(run => (double)run.OpportunitiesWithImdb) / Math.Max(1, totalOpportunities),
+            runs.Sum(run => (double)run.CatalogItemsWithImdb) / Math.Max(1, runs.Sum(run => (long)run.CatalogItems)),
+            runs.Average(run => run.RealizedEpisodesPerSeries),
             CandidateCodes.ToDictionary(code => code, code => runs.Average(run => run.ByCandidate[code])),
             RowCodes.ToDictionary(code => code, code => runs.Average(run => run.ByRow[code])));
     }
@@ -153,9 +160,11 @@ public static class Program
 
         return new RunOutcome(
             population.Opportunities,
+            population.OpportunitiesWithImdbKey,
+            population.CatalogItems,
+            population.CatalogItemsWithImdbKey,
+            population.RealizedEpisodesPerSeries,
             rate,
-            population.OpportunityWeightedImdbCoverage,
-            population.ItemWeightedImdbCoverage,
             byCandidate,
             byRow);
     }
@@ -170,7 +179,7 @@ public static class Program
 
         var csv = new StringBuilder();
         csv.Append("series,parameter,value,seeds,opportunities,recoveryMean,recoveryMin,recoveryMax,")
-           .Append("opportunityWeightedImdbCoverage,itemWeightedImdbCoverage");
+           .Append("opportunityWeightedImdbCoverage,itemWeightedImdbCoverage,realizedEpisodesPerSeries");
 
         foreach (var code in CandidateCodes)
         {
@@ -195,7 +204,8 @@ public static class Program
                .Append(F(point.RecoveryMin)).Append(',')
                .Append(F(point.RecoveryMax)).Append(',')
                .Append(F(point.OpportunityWeightedImdb)).Append(',')
-               .Append(F(point.ItemWeightedImdb));
+               .Append(F(point.ItemWeightedImdb)).Append(',')
+               .Append(point.RealizedEpisodesPerSeries.ToString("F2", CultureInfo.InvariantCulture));
 
             foreach (var code in CandidateCodes)
             {
@@ -217,14 +227,15 @@ public static class Program
     private static void Print(IReadOnlyList<SweepPoint> points)
     {
         Console.WriteLine();
-        Console.WriteLine("| series | value | opportunities | recovery (mean) | range over 20 seeds | imdb: opportunity-weighted | imdb: item-weighted |");
-        Console.WriteLine("|---|---|---|---|---|---|---|");
+        Console.WriteLine("| series | value | realized eps/series | opportunities | recovery (pooled) | range over 20 seeds | imdb: opportunity-weighted | imdb: item-weighted |");
+        Console.WriteLine("|---|---|---|---|---|---|---|---|");
 
         foreach (var point in points)
         {
             Console.WriteLine(string.Join(" | ",
                 "| " + point.Series,
                 point.Value,
+                point.RealizedEpisodesPerSeries.ToString("F2", CultureInfo.InvariantCulture),
                 point.Opportunities.ToString(CultureInfo.InvariantCulture),
                 point.RecoveryMean.ToString("P1", CultureInfo.InvariantCulture),
                 point.RecoveryMin.ToString("P1", CultureInfo.InvariantCulture) + " – " + point.RecoveryMax.ToString("P1", CultureInfo.InvariantCulture),
@@ -282,9 +293,11 @@ public static class Program
 
     private sealed record RunOutcome(
         int Opportunities,
+        int OpportunitiesWithImdb,
+        int CatalogItems,
+        int CatalogItemsWithImdb,
+        double RealizedEpisodesPerSeries,
         double RecoveryRate,
-        double OpportunityWeightedImdb,
-        double ItemWeightedImdb,
         IReadOnlyDictionary<ReasonCode, double> ByCandidate,
         IReadOnlyDictionary<ReasonCode, double> ByRow);
 
@@ -299,6 +312,7 @@ public static class Program
         double RecoveryMax,
         double OpportunityWeightedImdb,
         double ItemWeightedImdb,
+        double RealizedEpisodesPerSeries,
         IReadOnlyDictionary<ReasonCode, double> ByCandidate,
         IReadOnlyDictionary<ReasonCode, double> ByRow);
 }

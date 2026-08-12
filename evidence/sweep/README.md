@@ -11,8 +11,11 @@ how much a run can vary for reasons that have nothing to do with the library's
 average quality, and which failure modes are structural rather than fixable.
 
 Produced by [`tools/Jellyfin.Plugin.UserDataRestore.Sweep`](../../tools/Jellyfin.Plugin.UserDataRestore.Sweep).
-Every point is **20 deterministic seeds**, ~2000 items each; the tables report the
-mean and the spread. Raw output: [`sweep.csv`](sweep.csv).
+Every point is **20 deterministic seeds**, ~2000 items each. Rates are pooled over
+all 20 populations rather than averaged across per-seed rates, so every
+opportunity carries equal weight; the ranges are the per-seed extremes. Raw
+output: [`sweep.csv`](sweep.csv), which also records the **realized** mean series
+length for every point.
 
 ```sh
 dotnet run -c Release --project tools/Jellyfin.Plugin.UserDataRestore.Sweep -- evidence/sweep/sweep.csv
@@ -53,14 +56,15 @@ Two measures of coverage are reported:
 
 | nominal IMDb coverage | 0 | 0.2 | 0.4 | 0.6 | 0.8 | 0.9 | 1.0 |
 |---|---|---|---|---|---|---|---|
-| recovery (mean of 20) | 0.0% | 20.7% | 41.6% | 61.5% | 82.1% | 91.3% | 100% |
-| spread across seeds | — | 13.5–28.8% | 32.4–49.9% | 50.2–68.4% | 71.6–87.2% | 83.0–95.4% | — |
+| recovery (pooled) | 0.0% | 20.6% | 41.5% | 61.5% | 82.2% | 91.5% | 100% |
+| spread across seeds | — | 13.4–30.5% | 32.2–49.5% | 51.7–68.8% | 72.4–87.2% | 83.4–95.4% | — |
 
-The mean tracks coverage exactly, which is arithmetic rather than discovery: with
-no duplicates and no pre-existing state, an opportunity is recoverable exactly
-when its item has an IMDb key. The informative part is the **spread**. At nominal
-50% coverage, individual servers of identical description land anywhere from 40%
-to 59%, because coverage is a property of series and series are not the same size.
+The pooled rate tracks coverage exactly, which is arithmetic rather than
+discovery: with no duplicates and no pre-existing state, an opportunity is
+recoverable exactly when its item has an IMDb key. The informative part is the
+**spread**. At nominal 50% coverage, individual servers of identical description
+land anywhere from 39.8% to 58.8%, because coverage is a property of a series and
+series are not the same size.
 
 ## Result 2 — TMDb alone recovers nothing, at any coverage
 
@@ -82,22 +86,22 @@ under-served.
 
 | titles duplicated | 0 | 0.05 | 0.1 | 0.2 | 0.35 | 0.5 |
 |---|---|---|---|---|---|---|
-| recovery | 91.3% | 86.8% | 82.0% | 72.9% | 59.6% | 47.3% |
+| recovery | 91.4% | 86.9% | 82.1% | 73.1% | 59.6% | 45.8% |
 
 | current items already holding state | 0 | 0.25 | 0.5 | 0.75 | 1.0 |
 |---|---|---|---|---|---|
-| recovery | 91.3% | 68.5% | 45.6% | 22.7% | 0.0% |
+| recovery | 91.4% | 68.6% | 45.7% | 22.8% | 0.0% |
 
 Duplicates make a key ambiguous; existing state is refused rather than overwritten
-(DESIGN §4.3). Note that item-weighted coverage stays at 91.5% down every column —
+(DESIGN §4.3). Note that item-weighted coverage stays at 91.6% down every column —
 these losses are invisible to any coverage measurement.
 
 ## Result 4 — move history is noise, not damage
 
 | moves per title | 1 | 2 | 3 | 5 | 8 |
 |---|---|---|---|---|---|
-| recovery | 91.3% | 91.3% | 91.3% | 91.3% | 91.3% |
-| dead GUID rows | 1,595 | 3,190 | 4,784 | 7,974 | 12,758 |
+| recovery | 91.5% | 91.5% | 91.5% | 91.5% | 91.5% |
+| dead GUID rows | 1,609 | 3,217 | 4,826 | 8,044 | 12,870 |
 
 Identical to four decimal places, while unmappable rows grow linearly. **Any
 ratio computed over rows rather than opportunities is dominated by this
@@ -106,15 +110,26 @@ in `evidence/alpha`.
 
 ## Result 5 — long series widen the spread
 
-| mean episodes per series | 1 | 6 | 18 | 60 | 150 |
+| configured mean episodes/series | 1 | 6 | 18 | 60 | 150 |
 |---|---|---|---|---|---|
-| recovery (mean) | 90.1% | 90.5% | 91.3% | 91.0% | 92.9% |
-| spread across seeds | 86.8–92.4% | 87.9–94.6% | 83.0–95.4% | 77.2–97.6% | 79.2–97.8% |
+| **realized** mean | 1.00 | 5.96 | 17.85 | 59.28 | 159.97 |
+| recovery (pooled) | 89.8% | 90.5% | 91.4% | 91.1% | 93.6% |
+| spread across seeds | 88.2–91.9% | 87.6–93.9% | 83.4–95.4% | 78.8–97.9% | 80.5–98.0% |
 
-The mean barely moves; the range roughly triples. A library of a few long-running
-shows is a far less predictable candidate than a library of many short ones at the
-same coverage, because a single missing series IMDb ID carries hundreds of
-episodes with it.
+The pooled rate barely moves; the range roughly quadruples. A library of a few
+long-running shows is a far less predictable candidate than a library of many
+short ones at the same coverage, because one missing series IMDb ID carries
+hundreds of episodes with it.
+
+The realized column is reported because it is the axis the curve is actually
+plotted against, and it does not always match the request: at a configured mean of
+150 only about nine series exist in a 1,400-episode library, so sampling noise
+moves the realized mean several percent either way. An earlier version was worse
+than noisy — it rounded a continuous exponential up and capped lengths at 400,
+which turned a configured 1 into 1.57 and a configured 150 into 133. The sampler
+is now an exact geometric whose mean is the configured value, series are never
+truncated mid-way to hit an item target, and the cap sits far outside the
+distribution.
 
 ## About the multiplicative relationship
 
@@ -134,9 +149,9 @@ means a bug worth finding rather than noise.
 
 | imdb | duplication | current state | expected | simulated | delta |
 |---|---|---|---|---|---|
-| 0.70 | 0.20 | 0.30 | 39.2% | 40.3% | +1.1 |
+| 0.70 | 0.20 | 0.30 | 39.2% | 40.5% | +1.3 |
 | 0.40 | 0.35 | 0.10 | 23.4% | 24.6% | +1.2 |
-| 0.95 | 0.05 | 0.50 | 45.1% | 45.4% | +0.3 |
+| 0.95 | 0.05 | 0.50 | 45.1% | 45.5% | +0.4 |
 | 0.55 | 0.10 | 0.75 | 12.4% | 12.4% | 0.0 |
 
 Real validation would require analyzer results from real installations. There are
@@ -163,19 +178,37 @@ these curves move with it.
 
 ## Corrections made while building this
 
-Three, all of which flattered the results before they were fixed:
+**Published in the first version of this document, and withdrawn:**
 
-1. **Ambiguity and no-match counts were read off the candidate totals**, where
-   they are always zero — those codes are row-level, since a row that matched
-   nothing never becomes a candidate.
-2. **Episodes were given a TMDb composite key.** The published plan shows Jellyfin
-   emits only the IMDb composite even when the series carries both IDs.
-3. **Removed items' GUIDs were drawn from the same identity space as live items**,
-   so some stranded "dead" rows matched a live item exactly and were counted as
-   recovered under §7.3 case 1. This put a 2% floor under libraries with no IMDb
-   coverage at all, pushed reported recovery above 100%, and made recovery appear
-   to *improve* with move count. Caught by the >100% figure; there is now a test
-   asserting no stranded GUID key matches a live item.
+- **Coverage was drawn per episode.** Jellyfin derives an episode's key from its
+  series' IMDb ID, so coverage is a property of a series and one missing ID takes
+  every episode of that show with it. Thousands of independent per-episode draws
+  averaged that risk away, understating the variance and making the result close
+  to a restatement of its own parameters. Every figure in the first version is
+  superseded for this reason.
+- **The multiplicative relationship was called validated** against held-out
+  configurations. Those configurations came from the same generator, so the check
+  was circular. See the section above.
+- **A single unweighted coverage fraction was said to locate a real server on the
+  curve.** It cannot: the predictive quantity is opportunity-weighted.
 
-The first two were fixed before any figure was published. The third was in the
-first published version of this document and its numbers are withdrawn.
+**Introduced during the rewrite and fixed before publication:**
+
+- **Removed items' GUIDs were drawn from the same identity space as live items**,
+  so some stranded "dead" rows matched a live item exactly and counted as
+  recovered under §7.3 case 1. It put a 2% floor under zero-coverage libraries,
+  pushed recovery to 101%, and made recovery appear to improve with move count.
+  This never reached a published number — the first version drew those GUIDs from
+  `Random` and could not collide. An earlier draft of this section claimed the
+  published figures contained it; that was wrong, and the git history says so.
+  There is now a test asserting no stranded GUID key matches a live item.
+- **Series lengths did not have the configured mean.** The sampler rounded a
+  continuous exponential up and capped at 400, so a configured mean of 1 produced
+  1.57 and 150 produced 133, and truncating the final series to hit an item target
+  biased it further. Corrected to an exact geometric, whole series only, with the
+  realized mean now reported alongside every point.
+- **Ambiguity and no-match counts were read off candidate totals**, where they are
+  always zero — those codes are row-level, since a row that matched nothing never
+  becomes a candidate.
+- **Episodes were given a TMDb composite key.** The published plan shows Jellyfin
+  emits only the IMDb composite even when the series carries both IDs.

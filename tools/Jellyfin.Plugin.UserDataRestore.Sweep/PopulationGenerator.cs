@@ -16,6 +16,8 @@ namespace Jellyfin.Plugin.UserDataRestore.Sweep;
 /// </param>
 /// <param name="CatalogItems">Current items in the configured libraries.</param>
 /// <param name="CatalogItemsWithImdbKey">Of those, the ones exposing an IMDb-derived key.</param>
+/// <param name="SeriesCount">How many series were generated.</param>
+/// <param name="EpisodeCount">How many episodes were generated.</param>
 public sealed record Population(
     IReadOnlyList<CurrentItemSnapshot> Items,
     IReadOnlyList<DetachedUserDataRow> DetachedRows,
@@ -24,8 +26,16 @@ public sealed record Population(
     int Opportunities,
     int OpportunitiesWithImdbKey,
     int CatalogItems,
-    int CatalogItemsWithImdbKey)
+    int CatalogItemsWithImdbKey,
+    int SeriesCount,
+    int EpisodeCount)
 {
+    /// <summary>
+    /// Gets the mean episodes per series actually produced, which is what the
+    /// series-length curve must be plotted against rather than the requested mean.
+    /// </summary>
+    public double RealizedEpisodesPerSeries => SeriesCount == 0 ? 0 : (double)EpisodeCount / SeriesCount;
+
     /// <summary>Gets IMDb coverage weighted by stranded state, the predictive measure.</summary>
     public double OpportunityWeightedImdbCoverage =>
         Opportunities == 0 ? 0 : (double)OpportunitiesWithImdbKey / Opportunities;
@@ -111,6 +121,8 @@ public static class PopulationGenerator
         private int _catalogItemsWithImdb;
         private int _removedItems;
         private int _duplicates;
+        private int _seriesCount;
+        private int _episodeCount;
 
         public void AddMovies()
         {
@@ -160,9 +172,14 @@ public static class PopulationGenerator
             var target = (int)Math.Round(shape.Titles * shape.EpisodeShare);
             var produced = 0;
 
+            // Whole series only. Truncating the last one to hit an item target
+            // biases the realized length distribution downwards — most visibly at
+            // long means, where the truncated series is the largest — so the item
+            // count overshoots instead, by at most one series.
             for (var series = 0; produced < target; series++)
             {
                 var episodeCount = EpisodeCount(series);
+                _seriesCount++;
                 var imdb = Draw(Deterministic.Kind.Series, series, Deterministic.Slot.Imdb) < shape.ImdbCoverage
                     ? Imdb(Deterministic.Kind.Series, series)
                     : null;
@@ -173,7 +190,7 @@ public static class PopulationGenerator
                 var seriesId = Deterministic.Identity(shape.Seed, Deterministic.Kind.Series, series);
                 var providers = Providers(imdb, tmdb);
 
-                for (var episode = 0; episode < episodeCount && produced < target; episode++, produced++)
+                for (var episode = 0; episode < episodeCount; episode++, produced++)
                 {
                     var season = 1 + (episode / EpisodesPerSeason);
                     var number = 1 + (episode % EpisodesPerSeason);
@@ -201,6 +218,7 @@ public static class PopulationGenerator
                         EpisodeNumber = number,
                     };
 
+                    _episodeCount++;
                     Place(item, keys, imdb is not null, Deterministic.Kind.Episode, series, providers, episode);
                 }
             }
@@ -214,7 +232,9 @@ public static class PopulationGenerator
             _opportunities,
             _opportunitiesWithImdb,
             _catalogItems,
-            _catalogItemsWithImdb);
+            _catalogItemsWithImdb,
+            _seriesCount,
+            _episodeCount);
 
         private static Guid NthUser(int index)
         {
@@ -243,14 +263,30 @@ public static class PopulationGenerator
         private double Draw(Deterministic.Kind kind, int index, Deterministic.Slot slot, int sub = 0) =>
             Deterministic.NextDouble(shape.Seed, kind, index, slot, sub);
 
-        // Geometric, so lengths vary the way real catalogs do: many short series,
-        // a few very long ones. Uniform lengths would understate how much recovery
-        // rides on a small number of coverage draws.
+        // Geometric on {1, 2, ...}, so lengths vary the way real catalogs do: many
+        // short series, a few very long ones.
+        //
+        // Its mean is exactly the configured value. An earlier version rounded a
+        // continuous exponential up, which is a different distribution: at a
+        // configured mean of 1 it produced 1.57, and a 400-episode cap pulled the
+        // long tail down so a configured 150 produced 133. A parameter that does
+        // not mean what it says makes every curve plotted against it wrong.
         private int EpisodeCount(int series)
         {
-            var mean = Math.Max(1, shape.MeanEpisodesPerSeries);
-            var u = Math.Clamp(Draw(Deterministic.Kind.Series, series, Deterministic.Slot.EpisodeCount), 1e-9, 1 - 1e-9);
-            return Math.Clamp((int)Math.Ceiling(-mean * Math.Log(1 - u)), 1, 400);
+            var mean = shape.MeanEpisodesPerSeries;
+            if (mean <= 1)
+            {
+                return 1;
+            }
+
+            var p = 1 / mean;
+            var u = Math.Clamp(Draw(Deterministic.Kind.Series, series, Deterministic.Slot.EpisodeCount), 1e-12, 1 - 1e-12);
+
+            // Inverse CDF. The cap is a guard against pathological configuration,
+            // not a shaping parameter: at a mean of 150 it excludes a tail of
+            // weight e^-33.
+            var length = (int)Math.Ceiling(Math.Log(1 - u) / Math.Log(1 - p));
+            return Math.Clamp(length, 1, 5000);
         }
 
         private void Place(
