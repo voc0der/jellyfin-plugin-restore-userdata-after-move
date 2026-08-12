@@ -140,8 +140,9 @@ public class SweepTests
         Assert.True(pairs >= population.Opportunities * 3, "each opportunity should leave at least its dead GUID rows");
         Assert.InRange(population.OpportunityWeightedImdbCoverage, 0, 1);
         Assert.Equal(
-            population.OpportunitiesWithImdbKey == 0,
-            population.OpportunityWeightedImdbCoverage == 0);
+            (double)population.OpportunitiesWithImdbKey / population.Opportunities,
+            population.OpportunityWeightedImdbCoverage,
+            12);
     }
 
     [Fact]
