@@ -9,6 +9,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.0.9",
+        "changelog": "## What's Changed\n\n- Warn that updating drops the old default trigger (a94368f)\n- Ship with no trigger, and prove the scan guard defers a run (3af840a)\n- Update manifest.json for version 1.0.0.8 (7232b56)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.8...1.0.0.9\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.9/RestoreUserDataAfterMove_1.0.0.9_jellyfin-10.11.11.zip",
+        "checksum": "3bf8b6156b0165cbdcbbc5d2c45524f5",
+        "timestamp": "2026-08-13T20:57:13Z"
+      },
+      {
         "version": "1.0.0.8",
         "changelog": "## What's Changed\n\n- Prove the identification lag the nightly schedule exists for (a09b0bc)\n- Collapse the two tasks into one nightly restore task (3a0a3e8)\n- Update manifest.json for version 1.0.0.7 (a9ac918)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.7...1.0.0.8\n",
         "targetAbi": "10.11.11.0",
