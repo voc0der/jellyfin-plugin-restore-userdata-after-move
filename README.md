@@ -112,6 +112,14 @@ unzip it into `<jellyfin-data>/plugins/`, and restart. The RC build is not in th
 catalogue on purpose: Jellyfin treats `targetAbi` as a *minimum*, so listing both
 builds would let a 12.0 server offer you the 10.11 one.
 
+**Updating from 1.0.0.8 or earlier** — those builds shipped a 3am daily trigger.
+This one ships none, and Jellyfin only writes a task's triggers to disk once you
+change them yourself, so an install still running the old default **loses it on
+update, silently and with nothing in the UI to say so**. After updating, go to
+Dashboard → Scheduled Tasks and add the trigger you want. Measured on 10.11.11,
+both directions: an untouched default is dropped, and a trigger you set yourself
+survives every later update.
+
 Building it yourself produces the same archives:
 
 ```sh
