@@ -61,6 +61,16 @@ for target in "${TARGETS[@]}"; do
         exit 1
     fi
 
+    # meta.json is assembled from MSBuild items, where a semicolon in any value
+    # is an item separator: it splits the line in two and produces JSON Jellyfin
+    # refuses to deserialize. The archive is the only place that is visible, so
+    # check the archive.
+    python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$staging/meta.json" || {
+        echo "ERROR: meta.json is not valid JSON." >&2
+        cat "$staging/meta.json" >&2
+        exit 1
+    }
+
     grep -q "\"targetAbi\": \"$abi\"" "$staging/meta.json" || {
         echo "ERROR: meta.json targetAbi is not $abi." >&2
         cat "$staging/meta.json" >&2

@@ -63,7 +63,7 @@
       <PluginManifestLine Include="  &quot;guid&quot;: &quot;6b416775-6a90-436f-a034-796c52f5a317&quot;," />
       <PluginManifestLine Include="  &quot;name&quot;: &quot;Restore User Data After Move&quot;," />
       <PluginManifestLine Include="  &quot;overview&quot;: &quot;Recovers user data Jellyfin stranded when media paths changed.&quot;," />
-      <PluginManifestLine Include="  &quot;description&quot;: &quot;Finds UserData rows detached by a path change, works out which current item each stranded snapshot belongs to, and restores them through Jellyfin's own user-data manager. Two scheduled tasks, neither of them triggered: analyze, then apply. The detached rows are never modified or deleted.&quot;," />
+      <PluginManifestLine Include="  &quot;description&quot;: &quot;Finds UserData rows detached by a path change, works out which current item each stranded snapshot belongs to, and restores them through Jellyfin's own user-data manager. One scheduled task, running nightly. Repeat runs are no-ops and never overwrite state a user has since set. The detached rows are never modified or deleted.&quot;," />
       <PluginManifestLine Include="  &quot;owner&quot;: &quot;$(Authors)&quot;," />
       <PluginManifestLine Include="  &quot;category&quot;: &quot;General&quot;," />
       <PluginManifestLine Include="  &quot;version&quot;: &quot;$(PluginVersion)&quot;," />
@@ -74,6 +74,8 @@
       <PluginManifestLine Include="  &quot;imagePath&quot;: &quot;&quot;" />
       <PluginManifestLine Include="}" />
     </ItemGroup>
+
+
 
     <WriteLinesToFile File="$(OutputPath)meta.json"
                       Lines="@(PluginManifestLine)"

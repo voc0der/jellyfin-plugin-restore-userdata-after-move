@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Live end-to-end proof for the apply path.
+# Live end-to-end proof that the plugin restores what Jellyfin stranded.
 #
 # Stands up a disposable Jellyfin server from the official tarball, strands user
-# data the way a real path change strands it, installs this plugin, runs the two
-# scheduled tasks, and asserts what the design claims. Nothing here touches the
+# data the way a real path change strands it, installs this plugin, runs its
+# scheduled task, and asserts what the design claims. Nothing here touches the
 # machine's real server: it downloads its own, pins its own port, and keeps every
 # byte it writes inside one scratch directory.
 #
@@ -33,8 +33,7 @@ readonly LINE_12="net10.0|12.0.0-rc5|preview/v12.0-rc5/amd64/jellyfin_12.0-rc5-a
 readonly SENTINEL="00000000-0000-0000-0000-000000000001"
 readonly ADMIN_PW="gap-admin-pw"
 readonly VIEWER_PW="gap-viewer-pw"
-readonly ANALYZE_KEY="UserDataRestoreAnalyze"
-readonly APPLY_KEY="UserDataRestoreApply"
+readonly TASK_KEY="UserDataRestore"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -726,16 +725,21 @@ strand_data() {
         "$empty" "$(get_user_data "$VIEWER_ID" "$NEW_EPISODE_ID" | normalize_state)"
 }
 
-analyze() {
-    run_task_by_key "$ANALYZE_KEY" "analysis"
-    require "analysis completed" Completed "$TASK_STATUS"
+# One task now: it analyses and restores in the same pass, and leaves the plan
+# behind as a record of what it did rather than as input to a later step.
+restore() {
+    run_task_by_key "$TASK_KEY" "${1:-restore}"
+    require "the run completed" Completed "$TASK_STATUS"
 
     PLAN=$(newest_plan)
-    [ -n "$PLAN" ] || die "the analysis wrote no plan file"
+    [ -n "$PLAN" ] || die "the run wrote no plan file"
     info "plan: $(basename "$PLAN")"
-
-    require "analysis left UserData byte-for-byte unchanged" true "$(jq -r '.readOnlyProof.unchanged' "$PLAN")"
 }
+
+# How many restores the run actually issued, read from its own record.
+planned_writes() { jq -r '.writes | length' "$PLAN"; }
+ready_count() { jq -r '.summary.candidateCounts.ready' "$PLAN"; }
+reason_count() { jq -r --arg r "$1" '.summary.candidateCounts[$r] // 0' "$PLAN"; }
 
 verify_restored() {
     local label=$1 user=$2 item=$3 expected=$4 actual
@@ -825,67 +829,50 @@ run_line() {
     start_server
     authenticate admin "$ADMIN_PW"
 
-    [ -n "$(task_id_by_key "$ANALYZE_KEY")" ] || die "the analysis task did not register; the plugin did not load"
-    [ -n "$(task_id_by_key "$APPLY_KEY")" ] || die "the apply task did not register"
-    pass "both scheduled tasks registered"
+    local task_id
+    task_id=$(task_id_by_key "$TASK_KEY")
+    [ -n "$task_id" ] || die "the restore task did not register; the plugin did not load"
+    pass "the scheduled task registered"
+
+    # It has to arrive already scheduled. A task nobody can find and nobody
+    # triggers does not plug anything.
+    require "it ships with a daily trigger" DailyTrigger \
+        "$(api_ok GET "/ScheduledTasks/$task_id" | jq -r '.Triggers[0].Type // "none"')"
 
     strand_data
 
-    local sentinel_before sentinel_count_before
+    # One title is deliberately given state before the run. A nightly task must
+    # never overwrite what a user has since done, and this is that case.
+    step "Spoiling one title so it must be left alone"
+    set_user_data "$ADMIN_ID" "$NEW_SPOILER_ID" '{"Played":true,"PlayCount":99,"PlaybackPositionTicks":1,"IsFavorite":false}' >/dev/null
+    set_user_data "$VIEWER_ID" "$NEW_SPOILER_ID" '{"Played":true,"PlayCount":98,"PlaybackPositionTicks":2,"IsFavorite":false}' >/dev/null
+    SPOILED_ADMIN=$(get_user_data "$ADMIN_ID" "$NEW_SPOILER_ID" | normalize_state)
+    SPOILED_VIEWER=$(get_user_data "$VIEWER_ID" "$NEW_SPOILER_ID" | normalize_state)
+    info "spoiler/admin:  $SPOILED_ADMIN"
+
+    local sentinel_before sentinel_count_before log_mark
     stop_server
     sentinel_before=$(sentinel_digest)
     sentinel_count_before=$(sentinel_count)
     start_server
     authenticate admin "$ADMIN_PW"
-
-    step "Analysis, with nothing configured"
-    analyze
-    local ready
-    ready=$(jq -r '.summary.candidateCounts.ready' "$PLAN")
-    [ "$ready" -ge 4 ] || die "the analysis found $ready ready candidates; expected at least 4 (two titles x two users).
-Read $PLAN for why."
-    pass "$ready candidates ready, from a plugin that was never configured"
-    require "the plan proposes one write per ready candidate" "$ready" "$(jq -r '.writes | length' "$PLAN")"
-
-    # --- preflight refuses a plan the world has moved out from under -------
-    step "Preflight refuses a plan whose preconditions changed"
-    set_user_data "$ADMIN_ID" "$NEW_SPOILER_ID" '{"Played":true,"PlayCount":99,"PlaybackPositionTicks":1,"IsFavorite":false}' >/dev/null
-    set_user_data "$VIEWER_ID" "$NEW_SPOILER_ID" '{"Played":true,"PlayCount":98,"PlaybackPositionTicks":2,"IsFavorite":false}' >/dev/null
-
-    run_task_by_key "$APPLY_KEY" "apply (expected to refuse)"
-    require "the apply failed" Failed "$TASK_STATUS"
-    require_contains "it said why" "Preflight refused this run" "$TASK_ERROR"
-
-    verify_restored "the movie was left untouched by the refused run" \
-        "$ADMIN_ID" "$NEW_MOVIE_ID" "played=false count=0 ticks=0 fav=false rating=none last=none"
-    require "a refused run is all-or-nothing: no writes landed" \
-        "played=false count=0 ticks=0 fav=false rating=none last=none" \
-        "$(get_user_data "$VIEWER_ID" "$NEW_EPISODE_ID" | normalize_state)"
-
-    stop_server
-    require "the stranded rows are still exactly as they were" "$sentinel_before" "$(sentinel_digest)"
-    start_server
-    authenticate admin "$ADMIN_PW"
-
-    # Everything from here on is the successful path, so the log from this point
-    # forward is expected to be clean. The refused run above logs errors on
-    # purpose, and counting those would make the health check meaningless.
-    local log_mark
     log_mark=$(wc -l < "$SERVER_LOG")
 
-    # --- the real thing ----------------------------------------------------
-    step "Applying"
-    analyze
-    require "the conflicting title is excluded, the rest still ready" 4 "$(jq -r '.writes | length' "$PLAN")"
-
-    run_task_by_key "$APPLY_KEY" "apply"
-    require "the apply completed" Completed "$TASK_STATUS"
+    step "One run, nothing configured"
+    restore "restore"
+    require "the conflicting title is excluded, the rest restored" 4 "$(planned_writes)"
+    require "and it says why it skipped the other one" 2 "$(reason_count current_state_conflict)"
 
     step "The data is back"
     verify_restored "movie / admin"    "$ADMIN_ID"  "$NEW_MOVIE_ID"   "$EXPECT_MOVIE_ADMIN"
     verify_restored "movie / viewer"   "$VIEWER_ID" "$NEW_MOVIE_ID"   "$EXPECT_MOVIE_VIEWER"
     verify_restored "episode / admin"  "$ADMIN_ID"  "$NEW_EPISODE_ID" "$EXPECT_EPISODE_ADMIN"
     verify_restored "episode / viewer" "$VIEWER_ID" "$NEW_EPISODE_ID" "$EXPECT_EPISODE_VIEWER"
+
+    verify_restored "the spoiled title was left exactly as the user left it" \
+        "$ADMIN_ID" "$NEW_SPOILER_ID" "$SPOILED_ADMIN"
+    verify_restored "for the second user too" \
+        "$VIEWER_ID" "$NEW_SPOILER_ID" "$SPOILED_VIEWER"
 
     step "The stranded rows were not consumed"
     stop_server
@@ -900,27 +887,39 @@ Read $PLAN for why."
     verify_restored "movie / admin, after restart"    "$ADMIN_ID"  "$NEW_MOVIE_ID"   "$EXPECT_MOVIE_ADMIN"
     verify_restored "episode / viewer, after restart" "$VIEWER_ID" "$NEW_EPISODE_ID" "$EXPECT_EPISODE_VIEWER"
 
-    step "Running it twice changes nothing"
-    analyze
-    require "nothing is ready any more" 0 "$(jq -r '.summary.candidateCounts.ready' "$PLAN")"
-    require "the recovered pairs are recognised as already applied" 4 "$(jq -r '.summary.candidateCounts.already_applied' "$PLAN")"
-    require "the plan proposes no writes" 0 "$(jq -r '.writes | length' "$PLAN")"
-
-    run_task_by_key "$APPLY_KEY" "apply (second time)"
-    require "the second apply completed" Completed "$TASK_STATUS"
-    verify_restored "movie / admin is unchanged by the second apply" \
+    step "Running it again changes nothing"
+    restore "second run"
+    require "nothing is ready any more" 0 "$(ready_count)"
+    require "the recovered pairs are recognised as already applied" 4 "$(reason_count already_applied)"
+    require "so it issues no writes" 0 "$(planned_writes)"
+    verify_restored "movie / admin is unchanged by the second run" \
         "$ADMIN_ID" "$NEW_MOVIE_ID" "$EXPECT_MOVIE_ADMIN"
+
+    # The property the whole nightly schedule rests on. Clearing a flag leaves
+    # the row in place with defaults, so the pair reads as a conflict rather
+    # than as an empty target -- which is the only reason a task that runs every
+    # night cannot undo what a user just did.
+    step "It does not fight the user"
+    api_ok DELETE "/UserPlayedItems/$NEW_MOVIE_ID?userId=$ADMIN_ID" >/dev/null
+    local cleared
+    cleared=$(get_user_data "$ADMIN_ID" "$NEW_MOVIE_ID" | normalize_state)
+    info "after marking unwatched: $cleared"
+
+    restore "run after the user marked it unwatched"
+    require "the run leaves it unwatched" "$cleared" \
+        "$(get_user_data "$ADMIN_ID" "$NEW_MOVIE_ID" | normalize_state)"
+    require "and issues no writes at all" 0 "$(planned_writes)"
 
     step "The server is healthy afterwards"
     scan_library
-    require "a library scan after the apply still completes" Completed "$TASK_STATUS"
+    require "a library scan afterwards still completes" Completed "$TASK_STATUS"
 
     stop_server
     require "and the stranded rows are still there at the end of it all" "$sentinel_before" "$(sentinel_digest)"
 
     local complaints
     complaints=$(tail -n "+$((log_mark + 1))" "$SERVER_LOG" | grep -cE '\[(ERR|FTL)\]' || true)
-    require "the server logged nothing at error level once the apply began" 0 "$complaints"
+    require "the server logged nothing at error level during the run" 0 "$complaints"
 
     stop_server
     printf '\n%s%s: all assertions held%s\n' "$C_GREEN$C_BOLD" "$LINE" "$C_OFF"

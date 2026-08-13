@@ -5,69 +5,37 @@
 </head>
 <body>
 <div id="userDataRestoreConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
-     data-require="emby-input,emby-button,emby-checkbox,emby-collapse">
+     data-require="emby-input,emby-button,emby-checkbox">
     <div data-role="content">
         <div class="content-primary">
 
             <div class="verticalSection">
                 <h2 class="sectionTitle">Restore User Data After Move</h2>
                 <p class="fieldDescription">
-                    Finds watch history Jellyfin lost when your files moved, and reports what it can
-                    put back. This version only reports &mdash; it cannot change anything.
+                    When your files move, Jellyfin loses what you had watched. This finds that
+                    history and puts it back, every night.
                 </p>
-            </div>
-
-            <div class="verticalSection">
-                <button is="emby-button" type="button" id="runAnalysis" class="raised button-submit block">
-                    <span>Run analysis</span>
-                </button>
-                <div class="fieldDescription" id="runStatus" style="margin-top:0.6em;">
-                    Uses every movie and TV library.
-                </div>
             </div>
 
             <form id="userDataRestoreConfigForm">
                 <div class="verticalSection">
-                    <div is="emby-collapse" title="Advanced">
-                        <div class="collapseContent">
+                    <div class="fieldDescription">Libraries to recover. None ticked means all of them.</div>
+                    <div id="libraryList" style="margin-top:0.8em;"></div>
 
-                            <div style="margin-top:0.5em;">
-                                <div class="fieldDescription">Libraries to recover into. None ticked means all of them.</div>
-                                <div id="libraryList" style="margin-top:0.6em;"></div>
-                            </div>
-
-                            <div class="inputContainer" style="margin-top:1.5em;">
-                                <label class="inputLabel inputLabelUnfocused" for="finalPathPrefixes">Limit to these folders</label>
-                                <textarea is="emby-textarea" id="finalPathPrefixes" rows="3" class="emby-input"></textarea>
-                                <div class="fieldDescription">
-                                    One per line, as the server sees them. Empty means the libraries' own folders.
-                                </div>
-                            </div>
-
-                            <label class="emby-checkbox-label" style="margin-top:1.5em;">
-                                <input is="emby-checkbox" type="checkbox" id="requirePathExists" />
-                                <span>Skip items whose media file is missing</span>
-                            </label>
-                            <div class="fieldDescription checkboxFieldDescription">
-                                Avoids recovering onto leftovers from an unfinished scan.
-                            </div>
-
-                            <label class="emby-checkbox-label" style="margin-top:1em;">
-                                <input is="emby-checkbox" type="checkbox" id="verboseLogging" />
-                                <span>Log every row to the server log</span>
-                            </label>
-                            <div class="fieldDescription checkboxFieldDescription">
-                                Includes titles and user IDs.
-                            </div>
-
-                            <button is="emby-button" type="submit" class="raised block" style="margin-top:1.5em;">
-                                <span>Save</span>
-                            </button>
-
-                        </div>
-                    </div>
+                    <button is="emby-button" type="submit" class="raised button-submit block" style="margin-top:1.5em;">
+                        <span>Save</span>
+                    </button>
                 </div>
             </form>
+
+            <div class="verticalSection">
+                <button is="emby-button" type="button" id="runNow" class="raised block">
+                    <span>Run now</span>
+                </button>
+                <div class="fieldDescription" id="runStatus" style="margin-top:0.6em;">
+                    Runs automatically at 3am. Results appear in Dashboard &rarr; Scheduled Tasks.
+                </div>
+            </div>
 
         </div>
     </div>
@@ -75,7 +43,7 @@
     <script type="text/javascript">
         (function () {
             var pluginId = '6b416775-6a90-436f-a034-796c52f5a317';
-            var taskKey = 'UserDataRestoreAnalyze';
+            var taskKey = 'UserDataRestore';
             var page = document.querySelector('#userDataRestoreConfigPage');
 
             function renderLibraries(folders, selectedIds) {
@@ -115,18 +83,6 @@
                 });
             }
 
-            function describeScope(config, folders) {
-                var chosen = (config.EligibleLibraryIds || []).length;
-                var paths = (config.FinalPathPrefixes || []).length;
-
-                if (chosen === 0 && paths === 0) {
-                    return 'Uses every movie and TV library.';
-                }
-
-                return 'Uses ' + (chosen === 0 ? 'every movie and TV library' : chosen + ' selected ' + (chosen === 1 ? 'library' : 'libraries'))
-                    + (paths === 0 ? '.' : ', limited to ' + paths + ' ' + (paths === 1 ? 'folder' : 'folders') + '.');
-            }
-
             function load() {
                 Dashboard.showLoadingMsg();
 
@@ -134,15 +90,7 @@
                     ApiClient.getPluginConfiguration(pluginId),
                     ApiClient.getVirtualFolders()
                 ]).then(function (results) {
-                    var config = results[0];
-                    var folders = results[1] || [];
-
-                    renderLibraries(folders, config.EligibleLibraryIds || []);
-                    page.querySelector('#finalPathPrefixes').value = (config.FinalPathPrefixes || []).join('\n');
-                    page.querySelector('#requirePathExists').checked = config.RequirePathExists !== false;
-                    page.querySelector('#verboseLogging').checked = config.VerboseLogging === true;
-                    page.querySelector('#runStatus').textContent = describeScope(config, folders);
-
+                    renderLibraries(results[1] || [], results[0].EligibleLibraryIds || []);
                     Dashboard.hideLoadingMsg();
                 });
             }
@@ -156,16 +104,7 @@
                         page.querySelectorAll('.libraryCheckbox:checked'),
                         function (input) { return input.getAttribute('data-libraryid'); });
 
-                    config.FinalPathPrefixes = page.querySelector('#finalPathPrefixes').value
-                        .split('\n')
-                        .map(function (line) { return line.trim(); })
-                        .filter(function (line) { return line.length > 0; });
-
-                    config.RequirePathExists = page.querySelector('#requirePathExists').checked;
-                    config.VerboseLogging = page.querySelector('#verboseLogging').checked;
-
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
-                        page.querySelector('#runStatus').textContent = describeScope(config, []);
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
                 });
@@ -173,8 +112,8 @@
                 return false;
             }
 
-            // Starting the task from here is the whole point: a user should not have
-            // to be told to go find it under Scheduled Tasks.
+            // Starting it from here is the whole point: nobody should have to be
+            // told to go find it under Scheduled Tasks to see whether it works.
             function run() {
                 var status = page.querySelector('#runStatus');
                 status.textContent = 'Starting...';
@@ -185,7 +124,7 @@
                     })[0];
 
                     if (!task) {
-                        status.textContent = 'Could not find the analysis task. Restart Jellyfin and try again.';
+                        status.textContent = 'Could not find the task. Restart Jellyfin and try again.';
                         return;
                     }
 
@@ -193,7 +132,7 @@
                         type: 'POST',
                         url: ApiClient.getUrl('ScheduledTasks/Running/' + task.Id)
                     }).then(function () {
-                        status.textContent = 'Running. Results appear in Dashboard → Scheduled Tasks, and in the plan file.';
+                        status.textContent = 'Running. Results appear in Dashboard → Scheduled Tasks.';
                     }, function () {
                         status.textContent = 'Could not start the task.';
                     });
@@ -204,7 +143,7 @@
 
             page.addEventListener('pageshow', load);
             page.querySelector('#userDataRestoreConfigForm').addEventListener('submit', save);
-            page.querySelector('#runAnalysis').addEventListener('click', run);
+            page.querySelector('#runNow').addEventListener('click', run);
         })();
     </script>
 </div>

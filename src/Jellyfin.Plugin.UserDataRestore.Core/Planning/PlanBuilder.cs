@@ -71,7 +71,7 @@ public static class PlanBuilder
             // can never be mistaken for one this build produced.
             ApplySupported = true,
             Summary = BuildSummary(result),
-            ReadOnlyProof = new PlanReadOnlyProof
+            TableChange = new PlanTableChange
             {
                 RowCountBefore = context.FingerprintBefore.RowCount,
                 RowCountAfter = context.FingerprintAfter.RowCount,

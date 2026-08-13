@@ -50,23 +50,26 @@ years ago.
 
 ## How it works
 
-Two tasks, neither of them scheduled. Nothing happens unless you run them.
+One scheduled task, **Restore user data after move**, which runs nightly. It
+finds the stranded rows, works out which item each belongs to now, and restores
+them in the same pass. It leaves a plan file behind recording exactly what it did
+and giving a reason for everything it skipped.
 
-1. **Analyze detached user data** — finds what can be recovered, gives a reason
-   for everything it cannot, and writes a plan file you can read. It proves it
-   changed nothing rather than asking you to take its word: it fingerprints every
-   row of the `UserData` table before and after the run and records both in the
-   plan.
-2. **Apply detached user-data recovery** — restores it. Running this task *is*
-   the confirmation; there is no arming step, no phrase to type, no checkbox.
+Leave it installed. Media that moves once moves again, and the whole point is
+that you stop thinking about it.
 
-Apply does not trust the plan. It re-runs the entire analysis first and compares:
-if a single stranded row changed, a target gained state, or a match became
-ambiguous, the whole run refuses and writes nothing. Each write is an absolute
-value through `IUserDataManager`, read back and verified before the next one goes
-out.
+Running it repeatedly is safe by construction, not by promise:
 
-Install it, run it, remove it. It is not meant to live on your server.
+- Once a target holds the recovered state, that pair reads as `already_applied`
+  and is never written again.
+- If you then change it yourself — mark something unwatched, un-favourite it —
+  the pair reads as `current_state_conflict` and is never written again either.
+  **A nightly run cannot undo what you just did.**
+- The stranded rows are never modified or deleted, so a failed run leaves the
+  only remaining copy of your history intact and the next run retries it.
+
+Every write is an absolute value through Jellyfin's own `IUserDataManager`, read
+back and verified. Nothing writes to the database directly.
 
 ## Installing
 
@@ -94,24 +97,22 @@ Building it yourself produces the same archives:
 
 ## Using it
 
-Open the plugin's settings and click **Run analysis**. There is nothing to
-configure: it uses every movie and TV library, scoped to those libraries' own
-folders as the server reports them.
+Install it. That is the whole setup — it uses every movie and TV library, scoped
+to those libraries' own folders as the server reports them, and it runs itself
+at 3am.
 
-Read the result, and if it looks right, run **Apply detached user-data recovery**
-from Dashboard → Scheduled Tasks.
+The settings page exists for one thing: ticking specific libraries, if you want
+fewer than all of them. There is nothing else on it. If you would rather not
+wait for tonight, **Run now** is there.
 
-Results appear in each task's summary and the server log; the full detail is in a
+Results appear in the task's summary and the server log; the full detail is in a
 plan file under `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
 
-Under **Advanced** you can restrict it to particular libraries or folders. The
-only common reason to bother is a library spanning two roots where you moved
-everything into one of them and the other still holds the items you left behind.
-
-Do this after your file moves are finished and Jellyfin has completed a full
-scan. Run it mid-migration and the old items still linger alongside the new ones,
-which honestly reports as ambiguous — the right answer to an unanswerable
-question, but not a useful one.
+It is at its best running behind whatever moves your files, the morning after.
+Running it *during* a migration is harmless but unproductive: the old items still
+linger alongside the new ones, which honestly reports as ambiguous — the right
+answer to an unanswerable question, but not a useful one. Tonight's run will
+catch it.
 
 If you are willing to share the `summary` block of your plan — counts only, no
 titles or user IDs — it is useful evidence for how this behaves on libraries

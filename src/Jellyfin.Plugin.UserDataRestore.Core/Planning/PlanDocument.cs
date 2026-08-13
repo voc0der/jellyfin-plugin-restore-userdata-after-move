@@ -3,14 +3,14 @@ using System.Text.Json.Serialization;
 namespace Jellyfin.Plugin.UserDataRestore.Core.Planning;
 
 /// <summary>
-/// The recovery plan (DESIGN §8): the immutable, reviewable artifact an analysis
-/// run produces.
+/// The record a run leaves behind: what it found, what it restored, and a reason
+/// for everything it did not.
 /// </summary>
 /// <remarks>
-/// The analysis writes it and the apply task reads it, but the plan is not
-/// authority to write: apply re-runs the whole analysis and reconciles against
-/// this document, so what the plan really carries is a record of what was true
-/// when it was made.
+/// Nothing consumes this. An earlier design had one task write it and another
+/// read it back, which is why it carries a content hash; now that a single run
+/// analyses and restores in one pass there is no handoff for it to authorise.
+/// It is an audit artifact, and the hash is what makes it tamper-evident.
 /// </remarks>
 public sealed record PlanDocument
 {
@@ -45,7 +45,7 @@ public sealed record PlanDocument
     [JsonPropertyName("targetAbi")]
     public required string TargetAbi { get; init; }
 
-    /// <summary>Gets the server's identity, so a plan cannot be applied on another server.</summary>
+    /// <summary>Gets the server's identity, so a plan can be traced to where it ran.</summary>
     [JsonPropertyName("serverId")]
     public required string ServerId { get; init; }
 
@@ -65,7 +65,10 @@ public sealed record PlanDocument
     [JsonPropertyName("finalPathPrefixes")]
     public IReadOnlyList<string> FinalPathPrefixes { get; init; } = [];
 
-    /// <summary>Gets a value indicating whether this build can apply anything. Always false in Milestone 1.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the build that wrote this plan could
+    /// restore anything. False means an analysis-only build produced it.
+    /// </summary>
     [JsonPropertyName("applySupported")]
     public bool ApplySupported { get; init; }
 
@@ -73,9 +76,9 @@ public sealed record PlanDocument
     [JsonPropertyName("summary")]
     public required PlanSummary Summary { get; init; }
 
-    /// <summary>Gets the before/after evidence that analysis wrote nothing.</summary>
-    [JsonPropertyName("readOnlyProof")]
-    public required PlanReadOnlyProof ReadOnlyProof { get; init; }
+    /// <summary>Gets what this run changed in the <c>UserData</c> table, if anything.</summary>
+    [JsonPropertyName("userDataTable")]
+    public required PlanTableChange TableChange { get; init; }
 
     /// <summary>Gets one entry per detached row.</summary>
     [JsonPropertyName("sourceRows")]
@@ -85,7 +88,7 @@ public sealed record PlanDocument
     [JsonPropertyName("candidates")]
     public IReadOnlyList<PlanCandidate> Candidates { get; init; } = [];
 
-    /// <summary>Gets the exact ordered list of writes a later apply task would perform.</summary>
+    /// <summary>Gets the exact ordered list of restores this run performed.</summary>
     [JsonPropertyName("writes")]
     public IReadOnlyList<PlanWrite> Writes { get; init; } = [];
 
@@ -117,22 +120,26 @@ public sealed record PlanSummary
     public required IReadOnlyDictionary<string, long> Diagnostics { get; init; }
 }
 
-/// <summary>Before/after fingerprints of the whole <c>UserData</c> table.</summary>
-public sealed record PlanReadOnlyProof
+/// <summary>
+/// Before/after fingerprints of the whole <c>UserData</c> table. A run that
+/// restored nothing leaves these identical, which is the cheapest possible proof
+/// that it touched nothing.
+/// </summary>
+public sealed record PlanTableChange
 {
-    /// <summary>Gets the row count before analysis.</summary>
+    /// <summary>Gets the row count before the run.</summary>
     [JsonPropertyName("rowCountBefore")]
     public required int RowCountBefore { get; init; }
 
-    /// <summary>Gets the row count after analysis.</summary>
+    /// <summary>Gets the row count after the run.</summary>
     [JsonPropertyName("rowCountAfter")]
     public required int RowCountAfter { get; init; }
 
-    /// <summary>Gets the table digest before analysis.</summary>
+    /// <summary>Gets the table digest before the run.</summary>
     [JsonPropertyName("digestBefore")]
     public required string DigestBefore { get; init; }
 
-    /// <summary>Gets the table digest after analysis.</summary>
+    /// <summary>Gets the table digest after the run.</summary>
     [JsonPropertyName("digestAfter")]
     public required string DigestAfter { get; init; }
 
@@ -164,7 +171,7 @@ public sealed record PlanSourceRow
     [JsonPropertyName("reportOnly")]
     public required PlanReportOnlyFields ReportOnly { get; init; }
 
-    /// <summary>Gets the stable fingerprint the apply preflight will re-check.</summary>
+    /// <summary>Gets the row's stable fingerprint, so a later run can tell it apart.</summary>
     [JsonPropertyName("fingerprint")]
     public required string Fingerprint { get; init; }
 
