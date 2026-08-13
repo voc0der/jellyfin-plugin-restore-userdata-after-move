@@ -697,19 +697,23 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
    reporting each of those keys — against the `KeyOwnership` index built at the
    start of the apply pass.  Unlike step 3 this is catalogue-wide, so it is
    established once per run and not once per write; see §9.1.
-5. Re-query `UserData` row *existence* for the exact pair, against the database
+5. Check current state through `IUserDataManager`, and skip anything not at
+   defaults.
+6. Re-query `UserData` row *existence* for the exact pair, against the database
    rather than through `IUserDataManager`.  The manager reports "no row" and "a
    row holding defaults" identically, and the difference between them is the
    difference between an item nobody has touched and an item somebody has just
-   deliberately cleared.  Any row at all: skip.
-6. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
-7. Call `IUserDataManager.SaveUserData(user, item, dto,
+   deliberately cleared.  Any row at all: skip.  This is the last check before the
+   save, and deliberately so — it is the authoritative one, so nothing belongs
+   between it and the write it guards.
+7. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
+8. Call `IUserDataManager.SaveUserData(user, item, dto,
    UserDataSaveReason.UpdateUserData)`.
-8. Re-read through `IUserDataManager` and verify the six semantic fields.
-9. Query the current item's rows and verify that Jellyfin wrote the expected
-   current keys with the recovered state.
-10. Append and flush a completed ledger record.
-11. Report progress.
+9. Re-read through `IUserDataManager` and verify the six semantic fields.
+10. Query the current item's rows and verify that Jellyfin wrote the expected
+    current keys with the recovered state.
+11. Append and flush a completed ledger record.
+12. Report progress.
 
 Using the partial-update DTO preserves current audio/subtitle selections.  V1
 does not restore the detached stream indexes because they are positional and may
@@ -741,6 +745,14 @@ of default values, which `IUserDataManager` cannot distinguish from no row at
 all, so a check made through the manager reads a deliberate clear as an untouched
 item and overwrites it.  Querying row existence directly is what closes that, and
 it has to happen immediately before the save to mean anything.
+
+The window is narrowed, not removed, and it is worth being exact about what is
+left.  A clear landing inside one database round trip would still be overwritten.
+Reaching that window at all requires the clear to land on a pair that currently
+has *no* row — which from the user's side is clearing something that already
+reads as clear — and the stranded row survives either way, so the state is
+recoverable by the next run.  Closing it properly needs a conditional write, and
+the only conditional write available is a direct database update, rejected below.
 
 Apply therefore requires a quiet maintenance window:
 

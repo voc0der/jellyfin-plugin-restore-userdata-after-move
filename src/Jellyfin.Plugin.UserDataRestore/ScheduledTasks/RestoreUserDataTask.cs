@@ -368,13 +368,30 @@ public class RestoreUserDataTask : IScheduledTask
             return counts with { Skipped = counts.Skipped + 1 };
         }
 
+        // Cheap second opinion through the manager, which sees state the database
+        // read below cannot contradict but may have cached differently.
+        if (!writer.Read(user, item).IsDefault)
+        {
+            _logger.LogInformation(
+                "Item {ItemId} gained user state for {UserId} since the analysis; leaving it alone.",
+                write.ItemId,
+                write.UserId);
+            return counts with { Skipped = counts.Skipped + 1 };
+        }
+
         // Row existence, straight from the database, because the manager cannot
         // answer it: it reports a pair with no row and a pair whose row holds
         // nothing but defaults identically. An unwatch or an unfavourite performed
         // since the analysis writes exactly such a row, and reading it as
-        // "untouched" is how a scheduled run would undo a deliberate act. The
-        // analysis asks this same question; asking it again here is what shrinks the
-        // window to nothing that matters.
+        // "untouched" is how a scheduled run would undo a deliberate act.
+        //
+        // Last of the three checks, immediately before the save, and in that order
+        // on purpose: it is the authoritative one, so nothing else belongs between
+        // it and the write it guards. What remains is a genuine race — the manager
+        // offers no conditional save, so another thread clearing this pair in the
+        // gap would still be overwritten — but the gap is one round trip, and
+        // reaching it at all requires the clear to land on a pair that has no row,
+        // which from the user's side is clearing something already clear.
         if (await reader.RowExistsAsync(write.UserId, write.ItemId, cancellationToken).ConfigureAwait(false))
         {
             _logger.LogInformation(
@@ -382,17 +399,6 @@ public class RestoreUserDataTask : IScheduledTask
                 + "A row holding default values is an explicit clear, not an absence.",
                 write.UserId,
                 write.ItemId);
-            return counts with { Skipped = counts.Skipped + 1 };
-        }
-
-        // Cheap second opinion through the manager, which sees state the database
-        // read above cannot contradict but may have cached differently.
-        if (!writer.Read(user, item).IsDefault)
-        {
-            _logger.LogInformation(
-                "Item {ItemId} gained user state for {UserId} since the analysis; leaving it alone.",
-                write.ItemId,
-                write.UserId);
             return counts with { Skipped = counts.Skipped + 1 };
         }
 
