@@ -283,7 +283,7 @@ public class PlanTests
     {
         public TemporaryDirectory()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "userdata-restore-tests-" + Guid.NewGuid().ToString("N"));
+            Path = System.IO.Path.Join(System.IO.Path.GetTempPath(), "userdata-restore-tests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path);
         }
 

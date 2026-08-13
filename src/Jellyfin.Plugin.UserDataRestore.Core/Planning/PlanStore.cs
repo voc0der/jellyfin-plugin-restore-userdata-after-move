@@ -46,7 +46,10 @@ public sealed class PlanStore(string directory)
 
         System.IO.Directory.CreateDirectory(_directory);
 
-        var path = Path.Combine(_directory, BuildFileName(plan));
+        // Join, not Combine: Combine would drop _directory entirely if a file
+        // name ever came back rooted, writing the plan somewhere else without
+        // complaint.
+        var path = Path.Join(_directory, BuildFileName(plan));
         var temporary = path + ".tmp";
         var json = PlanCanonicalizer.ToReadableJson(plan);
 

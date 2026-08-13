@@ -329,16 +329,14 @@ public class RestoreUserDataTask : IScheduledTask
             applied.Skipped,
             applied.Failed);
 
-        foreach (var code in ReasonCodes.All)
+        foreach (var code in ReasonCodes.All.Where(
+            code => result.CandidateCounts[code] > 0 || result.RowCounts[code] > 0))
         {
-            if (result.CandidateCounts[code] > 0 || result.RowCounts[code] > 0)
-            {
-                _logger.LogInformation(
-                    "Classification {Reason}: {Candidates} candidates, {Rows} rows.",
-                    ReasonCodes.ToWire(code),
-                    result.CandidateCounts[code],
-                    result.RowCounts[code]);
-            }
+            _logger.LogInformation(
+                "Classification {Reason}: {Candidates} candidates, {Rows} rows.",
+                ReasonCodes.ToWire(code),
+                result.CandidateCounts[code],
+                result.RowCounts[code]);
         }
 
         if (result.Diagnostics.EligibleTargetCount > 0 && result.Diagnostics.EligibleTargetsWithProviderKeys == 0)

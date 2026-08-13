@@ -56,15 +56,7 @@ public static class PathScope
     public static bool IsBeneathAny(string? path, IEnumerable<string> prefixes, StringComparison comparison)
     {
         ArgumentNullException.ThrowIfNull(prefixes);
-        foreach (var prefix in prefixes)
-        {
-            if (IsBeneath(path, prefix, comparison))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return prefixes.Any(prefix => IsBeneath(path, prefix, comparison));
     }
 
     /// <summary>

@@ -43,7 +43,10 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <summary>
     /// Gets the directory plans are written to.
     /// </summary>
-    public string PlanDirectory => Path.Combine(DataFolderPath, "plans");
+    // Join rather than Combine: Combine discards everything before a rooted
+    // segment, so a rooted right-hand side silently relocates the whole path.
+    // Nothing here is rooted, and Join keeps it that way if anything ever is.
+    public string PlanDirectory => Path.Join(DataFolderPath, "plans");
 
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages() =>
