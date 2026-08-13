@@ -3,8 +3,12 @@
 **Status:** Shipped, and narrower than what this document originally described.
 
 What exists is **one scheduled task**, `Restore user data after move` (key
-`UserDataRestore`), carrying a daily trigger by default.  Install it, tick the
-libraries it may touch, and leave it alone.  It analyses and restores in the same
+`UserDataRestore`), carrying **no trigger by default**.  Install it, tick the
+libraries it may touch, and add a trigger that lands after your own mover and the
+library scan that follows it.  Jellyfin has no task chaining — only clock and
+interval triggers — so it cannot express the dependency this task actually has,
+and a shipped default would be a guess at an operator's maintenance window that
+runs mid-move when wrong.  It analyses and restores in the same
 run, writes a plan artifact for the record, skips itself while a library scan is
 in progress, and re-checks each target immediately before writing so it can never
 overwrite state a user set since the analysis.  Detached rows are never modified
@@ -74,9 +78,17 @@ factory cleanly on both supported ABIs.  That is Gate 0, not an assumption.
 
 ### Why two tasks instead of one — SUPERSEDED
 
-> This section is kept for its reasoning.  The plugin ships **one** task with a
-> daily trigger.  What follows is what was originally argued, and why it turned
-> out to be solving a non-problem.
+> This section is kept for its reasoning.  The plugin ships **one** task.  What
+> follows is what was originally argued, and why it turned out to be solving a
+> non-problem.
+>
+> Note that the shipped task does return an empty trigger list, as this section
+> wanted — but not for this section's reason.  The argument below is that a
+> schedule is *dangerous* because a repeating apply could repeat writes.  That is
+> false, for the reason given at the end.  The real reason there is no default
+> schedule is that Jellyfin cannot chain a task to the library scan that has to
+> precede it, so any shipped time would be a guess at an operator's maintenance
+> window.  Adding a trigger is expected, not a hazard.
 
 `GetDefaultTriggers()` returning no triggers makes a task manual by default, but
 an administrator can still add a schedule later.  A single task whose saved
@@ -103,8 +115,12 @@ memory is the target's own rows.  The design is stateless.
 Repeat runs are not merely harmless, they are the point.  Jellyfin reattaches
 user data to the item at a new path by provider id, but only if that item is
 already identified when the old one is removed; when identification lags the
-move, the rows strand and Jellyfin never gets a second chance.  A nightly task
-does.  The harness asserts exactly this sequence.
+move, the rows strand and Jellyfin never gets a second chance.  A task on a
+repeating trigger does.  The harness asserts exactly this sequence.
+
+This is why the task carries no trigger of its own and asks the operator for one,
+rather than shipping a schedule: it needs to run *after* a scan, repeatedly, and
+Jellyfin can express the "repeatedly" but not the "after".
 
 ---
 

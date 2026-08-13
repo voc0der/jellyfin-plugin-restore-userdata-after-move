@@ -25,12 +25,16 @@ namespace Jellyfin.Plugin.UserDataRestore.ScheduledTasks;
 /// calls ready is ready as of moments ago. A plan from yesterday is not a
 /// contract to honour today — by then the library has drifted again — so the
 /// plan this writes is a record of what happened, not an input to anything.</para>
-/// <para>Safe to run on a schedule, which is the point: media that moves once
-/// moves again. Nothing here can restore the same snapshot twice. Once a target
-/// holds the recovered state the pair classifies <c>already_applied</c>; if
-/// somebody edits it afterwards it classifies <c>current_state_conflict</c>.
-/// Either way it is never written again, so a nightly run cannot undo a user
-/// marking something unwatched.</para>
+/// <para>Safe to run on a schedule, which is the point: identification lags
+/// stranding. Jellyfin reattaches user data across a move by provider id, but
+/// only if the new item is already identified when the old one is removed, and
+/// it gets exactly one attempt. A repeating run gets one every time, and picks
+/// the item up as soon as its provider ids arrive. Nothing here can restore the
+/// same snapshot twice. Once a target holds the recovered state the pair
+/// classifies <c>already_applied</c>; if somebody edits it afterwards it
+/// classifies <c>current_state_conflict</c>. Either way it is never written
+/// again, so a scheduled run cannot undo a user marking something
+/// unwatched.</para>
 /// <para>The stranded rows are never modified or deleted. They are the only
 /// remaining copy of this state, and leaving them intact is what makes a failed
 /// run recoverable.</para>
@@ -92,18 +96,18 @@ public class RestoreUserDataTask : IScheduledTask
 
     /// <inheritdoc />
     /// <remarks>
-    /// Daily, because the problem recurs: anything that moves media on a schedule
-    /// strands user data on a schedule. Running nightly is what makes this a fix
-    /// rather than a chore, and repeat runs are no-ops by construction.
+    /// None. This task is only useful after the thing that moves your media has
+    /// finished and the library has been rescanned, and Jellyfin cannot express
+    /// "run after that" — it has no task chaining, only wall-clock and interval
+    /// triggers. A default schedule would therefore be a guess at someone else's
+    /// maintenance window, and a wrong guess runs mid-move, where every stranded
+    /// row honestly reports as unmatchable.
+    ///
+    /// So it ships inert. Add a trigger in Dashboard -> Scheduled Tasks timed to
+    /// land after your own pipeline, or press Run now. Repeat runs are no-ops by
+    /// construction, so an over-frequent trigger costs nothing but log lines.
     /// </remarks>
-    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() =>
-    [
-        new TaskTriggerInfo
-        {
-            Type = TaskTriggerInfoType.DailyTrigger,
-            TimeOfDayTicks = TimeSpan.FromHours(3).Ticks,
-        },
-    ];
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 
     /// <inheritdoc />
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)

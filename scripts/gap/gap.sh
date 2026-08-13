@@ -626,6 +626,16 @@ newest_plan() {
     find "$DATA" -name 'plan-*.json' -printf '%f\t%p\n' 2>/dev/null | sort -r | head -1 | cut -f2
 }
 
+# A run that bails before doing any work writes no plan at all. Counting files
+# cannot detect that -- the plugin keeps only the last five, so once that many
+# exist the count never changes again, and an assertion on it passes whether a
+# plan was written or not. The newest plan's name is the honest signal.
+newest_plan_name() {
+    local p
+    p=$(newest_plan)
+    if [ -n "$p" ]; then basename "$p"; else echo none; fi
+}
+
 # ---------------------------------------------------------------------------
 # Phases
 # ---------------------------------------------------------------------------
@@ -807,13 +817,106 @@ verify_identification_lag() {
     restore "run after identification arrived"
     [ "$(planned_writes)" -gt 0 ] \
         || die "the target is identified and empty, but the run still issued no writes.
-  This is the case the nightly schedule exists for."
-    pass "the next nightly run picks it up"
+  This is the case a repeating schedule exists for."
+    pass "the next scheduled run picks it up"
 
     verify_restored "movie / admin, recovered after the lag"  "$ADMIN_ID"  "$unidentified" "$pre_admin"
     verify_restored "movie / viewer, recovered after the lag" "$VIEWER_ID" "$unidentified" "$pre_viewer"
 
     NEW_MOVIE_ID=$unidentified
+}
+
+# Mid-scan is the one moment the library actively lies. Jellyfin removes the
+# vacated items and creates their replacements in separate passes, so a run that
+# lands between the two sees stranded rows that match nothing and targets that
+# look like fresh empty items -- the exact shape a wrong restore wears. The task
+# is supposed to notice and stand down.
+#
+# Proving that needs a scan slow enough to still be running when the restore task
+# starts, which a four-file fixture library will never be. So this stands up a
+# throwaway library big enough to take a while. It runs last, after every recovery
+# assertion, so nothing it adds to the plugin's scope can disturb what is already
+# proven.
+verify_scan_guard() {
+    step "It stands down while the library is being rebuilt"
+
+    # Real video, hardlinked, not empty files: an unprobeable file makes Jellyfin
+    # log at error level, which would land in the same log window the final
+    # "nothing at error level" assertion reads. One ffmpeg call and N links.
+    local bulk="$MEDIA/bulk/movies" count=${BULK_ITEMS:-2000} i
+    mkdir -p "$bulk"
+    make_video "$bulk/.template.mp4"
+    for i in $(seq 1 "$count"); do
+        mkdir -p "$bulk/Filler $i (2000)"
+        ln "$bulk/.template.mp4" "$bulk/Filler $i (2000)/Filler $i (2000).mp4"
+    done
+    rm -f "$bulk/.template.mp4"
+    info "staged $count throwaway titles to make the scan take a while"
+
+    local options
+    options=$(jq -nc --arg p "$bulk" '{
+        LibraryOptions: {
+            PathInfos: [{Path: $p}],
+            EnableRealtimeMonitor: false,
+            SaveLocalMetadata: false,
+            EnableInternetProviders: false,
+            TypeOptions: [{Type: "Movie", MetadataFetchers: [], MetadataFetcherOrder: [],
+                           ImageFetchers: [], ImageFetcherOrder: []}]
+        }}')
+    api_ok POST "/Library/VirtualFolders?name=Bulk&collectionType=movies&refreshLibrary=false" "$options" >/dev/null
+
+    # The guard matches this exact key, not the localized display name. If a
+    # server ever renames it the guard silently never fires, so the key's
+    # existence is itself worth asserting.
+    local scan_id restore_id
+    scan_id=$(task_id_by_key RefreshLibrary)
+    [ -n "$scan_id" ] || die "no scheduled task has the key RefreshLibrary on this server.
+  The scan guard matches on that key, so on this server it could never fire."
+    pass "the scan task still has the key the guard matches on"
+    restore_id=$(task_id_by_key "$TASK_KEY")
+
+    local plan_before mark i state
+    plan_before=$(newest_plan_name)
+    mark=$(wc -l < "$SERVER_LOG")
+
+    api_ok POST "/ScheduledTasks/Running/$scan_id" >/dev/null
+    for i in $(seq 1 100); do
+        state=$(task_field "$scan_id" '.State')
+        [ "$state" = "Running" ] && break
+        sleep 0.2
+    done
+    require "a library scan is under way" Running "$state"
+
+    run_task "$restore_id" "run started mid-scan"
+    require "the run completed" Completed "$TASK_STATUS"
+
+    # The proof the race was real. The task bails in milliseconds, so the scan it
+    # was racing must still be going when it finishes; if the scan had already
+    # ended, the guard was never exercised and everything below would pass for
+    # the wrong reason.
+    require "and the scan outlasted it, so the guard was genuinely under test" \
+        Running "$(task_field "$scan_id" '.State')"
+
+    require "it wrote no plan, having done nothing to record" "$plan_before" "$(newest_plan_name)"
+
+    local said
+    said=$(tail -n "+$((mark + 1))" "$SERVER_LOG" | grep -c 'A library scan is running' || true)
+    [ "$said" -gt 0 ] || die "the run issued no writes, but never said it was standing down for a scan.
+  Silence and correct behaviour are indistinguishable here; the guard must log."
+    pass "and said why it stood down"
+
+    for i in $(seq 1 900); do
+        [ "$(task_field "$scan_id" '.State')" = "Idle" ] && break
+        sleep 1
+    done
+    require "the scan finishes" Idle "$(task_field "$scan_id" '.State')"
+
+    # And the guard is a deferral, not a lockout: the very next run works.
+    restore "run once the scan is done"
+    [ "$(newest_plan_name)" != "$plan_before" ] \
+        || die "the scan has finished, but the run still wrote no plan.
+  The guard is supposed to defer a run, not disable the task."
+    pass "it runs normally again afterwards"
 }
 
 restore() {
@@ -928,14 +1031,16 @@ run_line() {
     [ -n "$task_id" ] || die "the restore task did not register; the plugin did not load"
     pass "the scheduled task registered"
 
-    # It has to arrive already scheduled. A task nobody can find and nobody
-    # triggers does not plug anything.
-    require "it ships with a daily trigger" DailyTrigger \
-        "$(api_ok GET "/ScheduledTasks/$task_id" | jq -r '.Triggers[0].Type // "none"')"
+    # It has to arrive inert. Jellyfin cannot express "run after the library scan
+    # that follows my mover" -- it has no task chaining -- so any default schedule
+    # would be a guess at someone else's maintenance window, and a wrong guess
+    # runs mid-move. The operator adds a trigger that fits their own pipeline.
+    require "it ships with no trigger of its own" 0 \
+        "$(api_ok GET "/ScheduledTasks/$task_id" | jq -r '(.Triggers // []) | length')"
 
     strand_data
 
-    # One title is deliberately given state before the run. A nightly task must
+    # One title is deliberately given state before the run. A repeating task must
     # never overwrite what a user has since done, and this is that case.
     step "Spoiling one title so it must be left alone"
     set_user_data "$ADMIN_ID" "$NEW_SPOILER_ID" '{"Played":true,"PlayCount":99,"PlaybackPositionTicks":1,"IsFavorite":false}' >/dev/null
@@ -989,7 +1094,7 @@ run_line() {
     verify_restored "movie / admin is unchanged by the second run" \
         "$ADMIN_ID" "$NEW_MOVIE_ID" "$EXPECT_MOVIE_ADMIN"
 
-    # The property the whole nightly schedule rests on. Clearing a flag leaves
+    # The property the whole repeating schedule rests on. Clearing a flag leaves
     # the row in place with defaults, so the pair reads as a conflict rather
     # than as an empty target -- which is the only reason a task that runs every
     # night cannot undo what a user just did.
@@ -1016,6 +1121,7 @@ run_line() {
     start_server
     authenticate admin "$ADMIN_PW"
     verify_identification_lag
+    verify_scan_guard
 
     local complaints
     complaints=$(tail -n "+$((log_mark + 1))" "$SERVER_LOG" | grep -cE '\[(ERR|FTL)\]' || true)

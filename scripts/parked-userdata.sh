@@ -84,8 +84,8 @@ analyzer does not consider them. They will become recoverable on their own once
 Jellyfin removes those items, which it defers while their folder looks empty.
 
 To convert them now, put any file into the emptied folders and run a library
-scan; the items get removed, the rows land on the sentinel, and the next nightly
-run picks them up. Do that only for folders you know are genuinely drained, not
+scan; the items get removed, the rows land on the sentinel, and the next run of
+the restore task picks them up. Do that only for folders you know are genuinely drained, not
 for ones on a mount that happens to be offline -- the guard exists for a reason.
 NOTE
 else

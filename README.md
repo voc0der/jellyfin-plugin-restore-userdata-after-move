@@ -58,17 +58,28 @@ years ago.
 
 ## How it works
 
-One scheduled task, **Restore user data after move**, which runs nightly. It
-finds the stranded rows, works out which item each belongs to now, and restores
-them in the same pass. It leaves a plan file behind recording exactly what it did
-and giving a reason for everything it skipped.
+One scheduled task, **Restore user data after move**. It finds the stranded rows,
+works out which item each belongs to now, and restores them in the same pass. It
+leaves a plan file behind recording exactly what it did and giving a reason for
+everything it skipped.
 
-Leave it installed, and run it nightly rather than once. Jellyfin does reattach
-user data to the item at a new path by provider id — but only if that item is
-already identified at the moment the old one is removed. When identification lags
-the move, which is the normal case for a library without NFO files, the rows
-strand and Jellyfin never gets a second chance. This task gets one every night,
-and picks the item up as soon as its provider IDs arrive.
+**It ships with no schedule, so it will not run until you give it one.** That is
+deliberate. This task is only useful once your mover has finished and the library
+has been rescanned, and Jellyfin cannot express "run after that" — it has no task
+chaining, only clock and interval triggers. Any default would be a guess at your
+maintenance window, and a wrong guess runs mid-move. You know when your pipeline
+settles; Jellyfin doesn't.
+
+Give it a recurring trigger rather than running it by hand once. Jellyfin does
+reattach user data to the item at a new path by provider id — but only if that
+item is already identified at the moment the old one is removed. When
+identification lags the move, which is the normal case for a library without NFO
+files, the rows strand and Jellyfin never gets a second chance. A recurring run
+gets one every time, and picks the item up as soon as its provider IDs arrive.
+
+It also stands down on its own if a library scan is in progress, and waits for
+the next run — mid-scan the old items are gone and their replacements are not in
+yet, so nothing the library reports at that moment can be trusted.
 
 Running it repeatedly is safe by construction, not by promise:
 
@@ -76,7 +87,7 @@ Running it repeatedly is safe by construction, not by promise:
   and is never written again.
 - If you then change it yourself — mark something unwatched, un-favourite it —
   the pair reads as `current_state_conflict` and is never written again either.
-  **A nightly run cannot undo what you just did.**
+  **A scheduled run cannot undo what you just did.**
 - The stranded rows are never modified or deleted, so a failed run leaves the
   only remaining copy of your history intact and the next run retries it.
 
@@ -109,13 +120,21 @@ Building it yourself produces the same archives:
 
 ## Using it
 
-Install it. That is the whole setup — it uses every movie and TV library, scoped
-to those libraries' own folders as the server reports them, and it runs itself
-at 3am.
+Installing it is almost the whole setup — it uses every movie and TV library,
+scoped to those libraries' own folders as the server reports them. The one thing
+left to you is *when*.
+
+Go to **Dashboard → Scheduled Tasks → Restore user data after move**, and add a
+trigger timed to land after whatever moves your files and after the library scan
+that follows it. Daily at 3am is a fine answer if nothing else suggests one. If
+you would rather not wait, **Run now** is on the same page.
+
+An over-frequent trigger costs nothing but log lines — repeat runs are no-ops —
+so err towards later rather than tighter. A run that fires mid-move reports
+everything as ambiguous and does nothing useful; the next one catches it.
 
 The settings page exists for one thing: ticking specific libraries, if you want
-fewer than all of them. There is nothing else on it. If you would rather not
-wait for tonight, **Run now** is there.
+fewer than all of them. There is nothing else on it.
 
 Results appear in the task's summary and the server log; the full detail is in a
 plan file under `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
