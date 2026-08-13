@@ -140,6 +140,12 @@ internal static class Scenario
         };
     }
 
+    /// <summary>
+    /// The key-ownership index the apply pass revalidates against, over exactly
+    /// the items given.
+    /// </summary>
+    public static KeyOwnership Ownership(params CurrentItemSnapshot[] items) => KeyOwnership.Build(items);
+
     public static DetachedUserDataRow Row(
         Guid userId,
         string key,

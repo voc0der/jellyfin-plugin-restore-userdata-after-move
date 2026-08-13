@@ -256,6 +256,15 @@ public class RestoreUserDataTask : IScheduledTask
 
         var writer = new UserDataWriter(_userDataManager);
         var collector = new LibraryItemCollector(_libraryManager);
+
+        // Built now rather than reused from the analysis pass, and this is the one
+        // piece of revalidation that cannot be per-write: whether a key still
+        // belongs to one item is a fact about the whole catalogue, and answering it
+        // costs a pass over every movie and episode on the server. Once per run is
+        // affordable; once per write is not. Everything else each target is checked
+        // against is read from the live item inside the loop.
+        var ownership = collector.BuildKeyOwnership(cancellationToken);
+
         var counts = default(AppliedCounts);
 
         for (var index = 0; index < writes.Count; index++)
@@ -278,7 +287,7 @@ public class RestoreUserDataTask : IScheduledTask
                 break;
             }
 
-            counts = await ApplyAsync(writer, reader, collector, writes[index], options, counts, cancellationToken)
+            counts = await ApplyAsync(writer, reader, collector, writes[index], options, ownership, counts, cancellationToken)
                 .ConfigureAwait(false);
             progress.Report(50 + (45.0 * (index + 1) / writes.Count));
         }
@@ -299,12 +308,13 @@ public class RestoreUserDataTask : IScheduledTask
         LibraryItemCollector collector,
         PlannedWrite write,
         AnalysisOptions options,
+        KeyOwnership ownership,
         AppliedCounts counts,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await ApplyCoreAsync(writer, reader, collector, write, options, counts, cancellationToken)
+            return await ApplyCoreAsync(writer, reader, collector, write, options, ownership, counts, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -324,6 +334,7 @@ public class RestoreUserDataTask : IScheduledTask
         LibraryItemCollector collector,
         PlannedWrite write,
         AnalysisOptions options,
+        KeyOwnership ownership,
         AppliedCounts counts,
         CancellationToken cancellationToken)
     {
@@ -346,7 +357,7 @@ public class RestoreUserDataTask : IScheduledTask
         // answering to them is not the item the evidence was about. Membership and
         // path come off the live item too, not out of a map built before the loop.
         var snapshot = collector.Snapshot(item, options.EligibleLibraryIds, options.RequirePathExists);
-        if (TargetRevalidation.Evaluate(snapshot, options, write.SourceKeys) is { } disqualification)
+        if (TargetRevalidation.Evaluate(snapshot, options, write.SourceKeys, ownership) is { } disqualification)
         {
             _logger.LogWarning(
                 "Item {ItemId} no longer qualifies as the target for user {UserId} ({Reason}); skipping. "

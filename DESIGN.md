@@ -644,10 +644,16 @@ and never delete the currently armed plan.
 > last checks are the stalest.  Check 3 survives too, both at entry and before
 > each write, and a scan starting mid-run abandons the rest of the batch.
 >
-> The one thing the preflight could do that per-write revalidation cannot is
-> re-establish the *uniqueness* of every reverse mapping, which is a property of
-> the whole catalogue rather than of one item.  Nothing changes it in bulk except
-> a scan or a refresh, which is what check 3 now covers.
+> Check 7's *uniqueness* clause is the one thing that cannot be answered from the
+> live item, because it is a property of the whole catalogue: no amount of looking
+> at a target reveals that a second item has started reporting its key.  So it is
+> re-established once at the start of the apply pass, from a `KeyOwnership` index
+> built over every current movie and episode, and each write is checked against
+> that (§9.2 step 4).  Once per run rather than once per write is a deliberate
+> cost decision — establishing it is a full catalogue pass — and it leaves drift
+> *inside* the write loop uncovered.  What moves keys in bulk is a scan or a
+> refresh, and check 3 covers those: the run refuses to start during a scan and
+> abandons the remaining writes if one begins.
 >
 > The rest of this section records what was designed.
 
@@ -687,19 +693,23 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
    membership, which is asked of the item's own ancestors rather than looked up in
    a map built earlier in the run: checking a target against the same photograph
    that admitted it checks nothing.
-4. Re-query `UserData` row *existence* for the exact pair, against the database
+4. Revalidate *uniqueness* — that the target is still the only current item
+   reporting each of those keys — against the `KeyOwnership` index built at the
+   start of the apply pass.  Unlike step 3 this is catalogue-wide, so it is
+   established once per run and not once per write; see §9.1.
+5. Re-query `UserData` row *existence* for the exact pair, against the database
    rather than through `IUserDataManager`.  The manager reports "no row" and "a
    row holding defaults" identically, and the difference between them is the
    difference between an item nobody has touched and an item somebody has just
    deliberately cleared.  Any row at all: skip.
-5. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
-6. Call `IUserDataManager.SaveUserData(user, item, dto,
+6. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
+7. Call `IUserDataManager.SaveUserData(user, item, dto,
    UserDataSaveReason.UpdateUserData)`.
-7. Re-read through `IUserDataManager` and verify the six semantic fields.
-8. Query the current item's rows and verify that Jellyfin wrote the expected
+8. Re-read through `IUserDataManager` and verify the six semantic fields.
+9. Query the current item's rows and verify that Jellyfin wrote the expected
    current keys with the recovered state.
-9. Append and flush a completed ledger record.
-10. Report progress.
+10. Append and flush a completed ledger record.
+11. Report progress.
 
 Using the partial-update DTO preserves current audio/subtitle selections.  V1
 does not restore the detached stream indexes because they are positional and may

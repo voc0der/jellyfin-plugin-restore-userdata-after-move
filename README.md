@@ -97,6 +97,9 @@ Running it repeatedly is safe by construction, not by promise:
   holding its media file, and still reporting the IDs the stranded row matched
   on. A metadata refresh landing mid-run re-identifies items, and an item that
   now answers to different IDs is skipped rather than written to.
+- And that it is still the *only* item answering to them. If a second copy turns
+  up carrying the same IMDb or TMDb ID, the match is ambiguous, and an ambiguous
+  match is skipped rather than guessed at.
 - The stranded rows are never modified or deleted, so a failed run leaves the
   only remaining copy of your history intact and the next run retries it.
 

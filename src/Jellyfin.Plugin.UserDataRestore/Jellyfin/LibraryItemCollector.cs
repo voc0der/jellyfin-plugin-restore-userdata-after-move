@@ -1,4 +1,5 @@
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.UserDataRestore.Core.Analysis;
 using Jellyfin.Plugin.UserDataRestore.Core.Model;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -122,6 +123,40 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
         };
 
         return ToSnapshot(item, membership, new Dictionary<Guid, Dictionary<string, string>>(), checkPathExists);
+    }
+
+    /// <summary>
+    /// Indexes which current items report which user-data keys.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The ownership index.</returns>
+    /// <remarks>
+    /// The catalogue-wide half of revalidation, and deliberately the cheapest pass
+    /// in this class: no library membership, no series provider IDs, and above all
+    /// no filesystem — the stat is the slowest thing in a run, and whether a file
+    /// is present has no bearing on which items claim a key. One query plus
+    /// <c>GetUserDataKeys()</c> per item.
+    /// </remarks>
+    public KeyOwnership BuildKeyOwnership(CancellationToken cancellationToken)
+    {
+        var items = _libraryManager.GetItemList(new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
+            Recursive = true,
+            DtoOptions = ItemFieldsNeeded,
+        });
+
+        var snapshots = new List<CurrentItemSnapshot>(items.Count);
+        var membership = new Dictionary<Guid, List<Guid>>();
+        var seriesProviderIds = new Dictionary<Guid, Dictionary<string, string>>();
+
+        foreach (var item in items)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            snapshots.Add(ToSnapshot(item, membership, seriesProviderIds, checkPathExists: false));
+        }
+
+        return KeyOwnership.Build(snapshots);
     }
 
     private Dictionary<Guid, List<Guid>> BuildMembership(

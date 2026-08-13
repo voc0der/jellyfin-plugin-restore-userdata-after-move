@@ -13,23 +13,29 @@ namespace Jellyfin.Plugin.UserDataRestore.Core.Analysis;
 /// because the only thing checked at that point was whether the item still had
 /// default user state — not whether it was still the item the evidence pointed
 /// at.</para>
-/// <para>So every per-item condition is evaluated again against a freshly read
-/// snapshot: kind, virtual/extra status, path, path existence, library
-/// membership, final-path prefix, and — the one that actually carries the
-/// identity — whether the item still reports the keys the stranded rows matched
-/// on. Anything short of all of them fails closed and the write is skipped; the
-/// stranded row is untouched, so the next run reconsiders it from scratch.</para>
-/// <para>What this cannot re-establish is <em>uniqueness</em>, which is a
-/// property of the whole catalogue rather than of one item: another item
-/// acquiring the same key would make the match ambiguous, and noticing that means
-/// rebuilding the reverse index over every movie and episode on the server. The
-/// caller covers the bulk case instead by refusing to run while a library scan is
-/// in progress and by abandoning the remaining writes if one starts mid-run.</para>
+/// <para>So every condition is evaluated again: kind, virtual/extra status, path,
+/// path existence, library membership, final-path prefix, whether the item still
+/// reports the keys the stranded rows matched on, and whether it is still the only
+/// item on the server that does. Anything short of all of them fails closed and
+/// the write is skipped; the stranded row is untouched, so the next run
+/// reconsiders it from scratch.</para>
+/// <para>The first seven are properties of the target and are re-read from the
+/// live item for each write. The eighth — uniqueness — is a property of the whole
+/// catalogue, so it is answered from a <see cref="KeyOwnership"/> index the caller
+/// rebuilds once at the start of the apply pass rather than once per write:
+/// establishing it costs a pass over every movie and episode on the server, which
+/// is affordable per run and not per write. Drift inside the loop itself is
+/// therefore not caught by this check, and the caller covers the case that
+/// produces it in bulk — a library scan — by refusing to start while one is
+/// running and abandoning the remaining writes if one begins.</para>
 /// </remarks>
 public static class TargetRevalidation
 {
     /// <summary>The wire prefix reported when the target stopped answering to a matched key.</summary>
     public const string KeyNoLongerReported = "key_no_longer_reported";
+
+    /// <summary>The wire prefix reported when a matched key is no longer the target's alone.</summary>
+    public const string KeyNoLongerUnique = "key_no_longer_unique";
 
     /// <summary>
     /// Checks one target against the conditions that admitted it.
@@ -37,6 +43,7 @@ public static class TargetRevalidation
     /// <param name="target">A snapshot of the item as it is right now.</param>
     /// <param name="options">The same scope the analysis ran under.</param>
     /// <param name="requiredKeys">The detached keys that matched this target.</param>
+    /// <param name="ownership">Who reports each key across the current catalog.</param>
     /// <returns>
     /// <see langword="null"/> when the target still qualifies, otherwise a short
     /// wire reason naming the first condition it now fails.
@@ -44,11 +51,13 @@ public static class TargetRevalidation
     public static string? Evaluate(
         CurrentItemSnapshot target,
         AnalysisOptions options,
-        IReadOnlyList<string> requiredKeys)
+        IReadOnlyList<string> requiredKeys,
+        KeyOwnership ownership)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(requiredKeys);
+        ArgumentNullException.ThrowIfNull(ownership);
 
         var exclusion = ItemEligibility.Evaluate(target, options);
         if (exclusion != ItemExclusion.None)
@@ -74,8 +83,24 @@ public static class TargetRevalidation
         // All of them, not any: the evidence rule weighed the keys as a set, and a
         // target that has stopped answering to one of them is not the target that
         // set described.
-        return missing.Length == 0
+        if (missing.Length > 0)
+        {
+            return KeyNoLongerReported + ":" + string.Join(' ', missing);
+        }
+
+        // Still answering to every key is not the same as still being the only
+        // thing that does. A second item acquiring one of these keys — a refresh
+        // identifying it as the same title, a duplicate arriving in another library
+        // — is exactly the ambiguity the analysis refuses to guess through, and it
+        // is invisible from the target alone.
+        var shared = requiredKeys
+            .Where(key => !ownership.IsOwnedOnlyBy(key, target.ItemId))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return shared.Length == 0
             ? null
-            : KeyNoLongerReported + ":" + string.Join(' ', missing);
+            : KeyNoLongerUnique + ":" + string.Join(' ', shared);
     }
 }

@@ -9,13 +9,14 @@ namespace Jellyfin.Plugin.UserDataRestore.Core.Tests;
 /// <remarks>
 /// Analysis and apply run in one pass but not in one instant. Everything here is
 /// about that gap: a target admitted seconds ago can have been refreshed, moved,
-/// unmounted, or re-identified before the write reaches it, and the only thing
-/// the write path used to re-check was whether the item still had default user
-/// state.
+/// unmounted, re-identified, or joined by a duplicate before the write reaches it,
+/// and the only thing the write path used to re-check was whether the item still
+/// had default user state.
 /// </remarks>
 public class RevalidationTests
 {
     private static readonly Guid MovieId = new("74f9957e-b453-7dbb-b614-d528834acab2");
+    private static readonly Guid OtherMovieId = new("0f2b6d13-0000-0000-0000-00000000000c");
     private static readonly Guid SeriesId = new("2a4c31c9-0000-0000-0000-00000000000a");
     private static readonly Guid EpisodeId = new("6d1e5aa0-0000-0000-0000-00000000000b");
 
@@ -24,7 +25,8 @@ public class RevalidationTests
     {
         var movie = Scenario.Movie(MovieId);
 
-        Assert.Null(TargetRevalidation.Evaluate(movie, Scenario.Options(), ["tt0133093"]));
+        Assert.Null(TargetRevalidation.Evaluate(
+            movie, Scenario.Options(), ["tt0133093"], Scenario.Ownership(movie)));
     }
 
     [Fact]
@@ -36,7 +38,8 @@ public class RevalidationTests
         // the stranded row was matched to.
         var refreshed = Scenario.Movie(MovieId, imdb: "tt9999999");
 
-        var reason = TargetRevalidation.Evaluate(refreshed, Scenario.Options(), ["tt0133093"]);
+        var reason = TargetRevalidation.Evaluate(
+            refreshed, Scenario.Options(), ["tt0133093"], Scenario.Ownership(refreshed));
 
         Assert.Equal("key_no_longer_reported:tt0133093", reason);
     }
@@ -49,7 +52,8 @@ public class RevalidationTests
         // stopped answering to half of them no longer satisfies what admitted it.
         var partial = Scenario.Movie(MovieId, tmdb: null);
 
-        var reason = TargetRevalidation.Evaluate(partial, Scenario.Options(), ["603", "tt0133093"]);
+        var reason = TargetRevalidation.Evaluate(
+            partial, Scenario.Options(), ["603", "tt0133093"], Scenario.Ownership(partial));
 
         Assert.Equal("key_no_longer_reported:603", reason);
     }
@@ -59,9 +63,57 @@ public class RevalidationTests
     {
         // A revalidation with nothing to revalidate against would report every
         // target as fine, which is worse than not checking: it looks checked.
-        var reason = TargetRevalidation.Evaluate(Scenario.Movie(MovieId), Scenario.Options(), []);
+        var movie = Scenario.Movie(MovieId);
+
+        var reason = TargetRevalidation.Evaluate(movie, Scenario.Options(), [], Scenario.Ownership(movie));
 
         Assert.Equal("key_no_longer_reported:none_recorded", reason);
+    }
+
+    [Fact]
+    public void ASecondItemClaimingTheMatchedKeyIsRejected()
+    {
+        // Nothing about the target itself changed. Another item acquired its IMDb
+        // ID — a refresh landing on a duplicate, a re-identification, a second copy
+        // arriving in another library — and the key that carried the whole identity
+        // argument now points at two things. The analysis would have called this
+        // ambiguous and refused to guess; so does the write.
+        var target = Scenario.Movie(MovieId);
+        var duplicate = Scenario.Movie(OtherMovieId, tmdb: null, libraryId: Scenario.OtherLibraryId);
+
+        var reason = TargetRevalidation.Evaluate(
+            target, Scenario.Options(), ["tt0133093"], Scenario.Ownership(target, duplicate));
+
+        Assert.Equal("key_no_longer_unique:tt0133093", reason);
+    }
+
+    [Fact]
+    public void AKeyThatMovedToAnotherItemEntirelyIsRejected()
+    {
+        // The target still reports the key it was matched on, but the catalogue says
+        // that key belongs to something else now. One of the two is wrong, and this
+        // is not the moment to decide which.
+        var target = Scenario.Movie(MovieId);
+        var claimant = Scenario.Movie(OtherMovieId, tmdb: null, libraryId: Scenario.OtherLibraryId);
+
+        var reason = TargetRevalidation.Evaluate(
+            target, Scenario.Options(), ["tt0133093"], Scenario.Ownership(claimant));
+
+        Assert.Equal("key_no_longer_unique:tt0133093", reason);
+    }
+
+    [Fact]
+    public void AKeyNoCurrentItemClaimsIsRejected()
+    {
+        // The target reports the key and the catalogue has never heard of it, which
+        // means the two disagree. Writing on the strength of a key nothing claims is
+        // not a weaker version of the argument; it is the absence of one.
+        var target = Scenario.Movie(MovieId);
+
+        var reason = TargetRevalidation.Evaluate(
+            target, Scenario.Options(), ["tt0133093"], Scenario.Ownership());
+
+        Assert.Equal("key_no_longer_unique:tt0133093", reason);
     }
 
     [Fact]
@@ -69,7 +121,8 @@ public class RevalidationTests
     {
         var moved = Scenario.Movie(MovieId, libraryId: Scenario.OtherLibraryId);
 
-        var reason = TargetRevalidation.Evaluate(moved, Scenario.Options(), ["tt0133093"]);
+        var reason = TargetRevalidation.Evaluate(
+            moved, Scenario.Options(), ["tt0133093"], Scenario.Ownership(moved));
 
         Assert.Equal(ItemExclusions.ToWire(ItemExclusion.LibraryNotConfigured), reason);
     }
@@ -79,7 +132,8 @@ public class RevalidationTests
     {
         var relocated = Scenario.Movie(MovieId, path: "/somewhere/else/Test Movie (2020).mkv");
 
-        var reason = TargetRevalidation.Evaluate(relocated, Scenario.Options(), ["tt0133093"]);
+        var reason = TargetRevalidation.Evaluate(
+            relocated, Scenario.Options(), ["tt0133093"], Scenario.Ownership(relocated));
 
         Assert.Equal(ItemExclusions.ToWire(ItemExclusion.PathOutsideFinalScope), reason);
     }
@@ -90,11 +144,14 @@ public class RevalidationTests
         // A mount dropping out mid-run. Recovering onto an item whose media is gone
         // re-strands the data on the next scan.
         var gone = Scenario.Movie(MovieId) with { PathExists = false };
+        var ownership = Scenario.Ownership(gone);
 
-        var reason = TargetRevalidation.Evaluate(gone, Scenario.Options(requirePathExists: true), ["tt0133093"]);
+        var reason = TargetRevalidation.Evaluate(
+            gone, Scenario.Options(requirePathExists: true), ["tt0133093"], ownership);
 
         Assert.Equal(ItemExclusions.ToWire(ItemExclusion.MissingPath), reason);
-        Assert.Null(TargetRevalidation.Evaluate(gone, Scenario.Options(requirePathExists: false), ["tt0133093"]));
+        Assert.Null(TargetRevalidation.Evaluate(
+            gone, Scenario.Options(requirePathExists: false), ["tt0133093"], ownership));
     }
 
     [Fact]
@@ -102,7 +159,8 @@ public class RevalidationTests
     {
         var virtualItem = Scenario.Movie(MovieId) with { IsVirtualItem = true };
 
-        var reason = TargetRevalidation.Evaluate(virtualItem, Scenario.Options(), ["tt0133093"]);
+        var reason = TargetRevalidation.Evaluate(
+            virtualItem, Scenario.Options(), ["tt0133093"], Scenario.Ownership(virtualItem));
 
         Assert.Equal(ItemExclusions.ToWire(ItemExclusion.VirtualOrExtra), reason);
     }
@@ -112,37 +170,95 @@ public class RevalidationTests
     {
         // Without this wiring the revalidation above checks nothing at run time: an
         // empty key set would reach it and it would have no identity to test.
+        var movie = Scenario.Movie(MovieId);
         var result = Scenario.Analyze(
             [
                 Scenario.Row(Scenario.UserA, "tt0133093"),
                 Scenario.Row(Scenario.UserA, "603"),
             ],
-            [Scenario.Movie(MovieId)]);
+            [movie]);
 
         var write = Assert.Single(result.Writes);
 
         Assert.Equal(["603", "tt0133093"], write.SourceKeys);
-        Assert.Null(TargetRevalidation.Evaluate(Scenario.Movie(MovieId), Scenario.Options(), write.SourceKeys));
+        Assert.Null(TargetRevalidation.Evaluate(
+            movie, Scenario.Options(), write.SourceKeys, Scenario.Ownership(movie)));
     }
 
     [Fact]
     public void AnEpisodeWriteCarriesTheSeriesDerivedKeyItMatchedOn()
     {
-        var result = Scenario.Analyze(
-            [Scenario.Row(Scenario.UserA, "tt0903747001001")],
-            [Scenario.Episode(EpisodeId, SeriesId)]);
+        var episode = Scenario.Episode(EpisodeId, SeriesId);
+        var result = Scenario.Analyze([Scenario.Row(Scenario.UserA, "tt0903747001001")], [episode]);
 
         var write = Assert.Single(result.Writes);
-        var episode = Scenario.Episode(EpisodeId, SeriesId);
 
         Assert.Equal(["tt0903747001001"], write.SourceKeys);
-        Assert.Null(TargetRevalidation.Evaluate(episode, Scenario.Options(), write.SourceKeys));
+        Assert.Null(TargetRevalidation.Evaluate(
+            episode, Scenario.Options(), write.SourceKeys, Scenario.Ownership(episode)));
 
         // The series being re-identified is the episode equivalent of the movie
         // refresh above, and it changes every episode key at once.
         var reidentified = Scenario.Episode(EpisodeId, SeriesId, seriesImdb: "tt0111161");
         Assert.Equal(
             "key_no_longer_reported:tt0903747001001",
-            TargetRevalidation.Evaluate(reidentified, Scenario.Options(), write.SourceKeys));
+            TargetRevalidation.Evaluate(
+                reidentified, Scenario.Options(), write.SourceKeys, Scenario.Ownership(reidentified)));
+    }
+
+    [Fact]
+    public void AnEpisodeGainingASiblingWithTheSameSeriesAndNumberIsRejected()
+    {
+        // Episode keys are the series' provider ID plus zero-padded season and
+        // episode numbers, so two episodes of the same series numbered alike collide
+        // — a duplicate rip left behind mid-migration is the usual way.
+        var episode = Scenario.Episode(EpisodeId, SeriesId);
+        var twin = Scenario.Episode(OtherMovieId, SeriesId, path: "/data/library/tv/Test Show/Season 01/dupe.mkv");
+
+        var reason = TargetRevalidation.Evaluate(
+            episode, Scenario.Options(), ["tt0903747001001"], Scenario.Ownership(episode, twin));
+
+        Assert.Equal("key_no_longer_unique:tt0903747001001", reason);
+    }
+
+    [Fact]
+    public void EveryKeyIsCheckedForUniquenessAndTheyAreReportedTogether()
+    {
+        var target = Scenario.Movie(MovieId);
+        var duplicate = Scenario.Movie(OtherMovieId, libraryId: Scenario.OtherLibraryId);
+
+        var reason = TargetRevalidation.Evaluate(
+            target, Scenario.Options(), ["603", "tt0133093"], Scenario.Ownership(target, duplicate));
+
+        Assert.Equal("key_no_longer_unique:603 tt0133093", reason);
+    }
+
+    [Fact]
+    public void OwnershipCountsAnItemOnceForAKeyItReportsTwice()
+    {
+        // GetUserDataKeys() is free to repeat itself, and CurrentKeyIndex already
+        // reads a repeated key as one match. If ownership disagreed, an item would
+        // be ambiguous with itself and every one of its writes would be skipped.
+        var doubled = Scenario.Movie(MovieId) with { UserDataKeys = ["tt0133093", "tt0133093", "603"] };
+
+        var ownership = Scenario.Ownership(doubled);
+
+        Assert.True(ownership.IsOwnedOnlyBy("tt0133093", MovieId));
+        Assert.Equal([MovieId], ownership.Owners("tt0133093"));
+        Assert.Null(TargetRevalidation.Evaluate(doubled, Scenario.Options(), ["tt0133093"], ownership));
+    }
+
+    [Fact]
+    public void OwnershipIndexesEveryItemItIsGivenAndNothingElse()
+    {
+        var ownership = Scenario.Ownership(Scenario.Movie(MovieId), Scenario.Episode(EpisodeId, SeriesId));
+
+        Assert.Equal(2, ownership.ItemCount);
+
+        // A movie's IMDb, TMDb and GUID keys, plus an episode's series-derived and
+        // GUID keys.
+        Assert.Equal(5, ownership.DistinctKeyCount);
+        Assert.Empty(ownership.Owners("tt0111161"));
+        Assert.Empty(ownership.Owners(null));
     }
 }
