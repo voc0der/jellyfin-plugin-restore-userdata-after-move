@@ -1,5 +1,16 @@
 # Plan
 
+> **This document is historical.**  It plans a staged rollout — analyzer-only
+> alpha, then an armed apply beta — that was overtaken.  What shipped is a single
+> `Restore user data after move` task with a daily trigger, no arming, and no
+> preflight; the milestones below describing an apply task, an arm, or two tasks
+> did not happen in that form.  See the status block at the top of
+> [DESIGN.md](DESIGN.md) for what actually exists, and
+> [`scripts/gap/`](scripts/gap/) for the harness that validates it end to end
+> against real 10.11.11 and 12.0-RC5 servers.
+>
+> The decision table in §7 is still current except for the row noted there.
+
 Where this stands, what gets built next, and what has already been decided so it
 does not get relitigated.
 
@@ -240,7 +251,7 @@ passes.
 | Sentinel rows are never edited, reattached, deleted, or garbage-collected | §3, §15 |
 | No fuzzy title/year/path matching; no parsing numeric keys as TMDb | §15 |
 | No merging into existing non-empty user state | §4.3, §15 |
-| Two tasks, both untriggered; apply requires a one-time expiring arm | §5.2 |
+| ~~Two tasks, both untriggered; apply requires a one-time expiring arm~~ **Reversed:** one task, daily trigger, no arm. Repeat runs are no-ops because a cleared target reads as `current_state_conflict` and a recovered one as `already_applied` | §5.2 |
 | Per-version builds with an exact runtime check | §11, §17.3 |
 | Name states the trigger and an outcome, never a mechanism | §5 |
 

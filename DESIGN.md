@@ -1,11 +1,29 @@
 # Design: Jellyfin detached user-data recovery plugin
 
-**Status:** Design settled.  The analyzer half (§7, §8) is implemented and
-validated on disposable Jellyfin 10.11.11 and 12.0 RC5 servers; the apply half
-(§6.3, §9) is not built.  See [§17](#17-empirical-results) for method, results,
-and coverage gaps, [`evidence/`](evidence/) for probe source, logs, row dumps, and
-published plans, and [`PLAN.md`](PLAN.md) for what happens next — which depends on
-a go/no-go review this design does not prejudge.
+**Status:** Shipped, and narrower than what this document originally described.
+
+What exists is **one scheduled task**, `Restore user data after move` (key
+`UserDataRestore`), carrying a daily trigger by default.  Install it, tick the
+libraries it may touch, and leave it alone.  It analyses and restores in the same
+run, writes a plan artifact for the record, skips itself while a library scan is
+in progress, and re-checks each target immediately before writing so it can never
+overwrite state a user set since the analysis.  Detached rows are never modified
+or deleted.
+
+The following sections describe machinery that was **designed and then removed**,
+and are kept only for the reasoning behind them:
+
+- **§1 "Why two tasks instead of one"** — superseded.  There is one task.
+- **§6.3 "Arming"** — removed entirely.  See the note in that section.
+- **§9 preflight** — removed.  The per-write guard replaced it.
+
+`readOnlyProof` in the plan artifact is now `userDataTable`; the document records
+what the table did rather than asserting the run changed nothing.
+
+See [§17](#17-empirical-results) for method and results, [`evidence/`](evidence/)
+for probe source, logs, and row dumps, and [`scripts/gap/`](scripts/gap/) for the
+end-to-end harness that stands up throwaway 10.11.11 and 12.0-RC5 servers and
+asserts the behaviour above against real ones.
 **Scope:** One-shot recovery of user state that Jellyfin detached after path-based
 item identity changed.  This is recovery only.  Preventing *future* loss is a
 separate problem, addressed by the stable-path design in the Coldarr repository
@@ -54,7 +72,11 @@ detached rows, and returns no default triggers
 The unproven part is whether a third-party plugin can resolve that database
 factory cleanly on both supported ABIs.  That is Gate 0, not an assumption.
 
-### Why two tasks instead of one
+### Why two tasks instead of one — SUPERSEDED
+
+> This section is kept for its reasoning.  The plugin ships **one** task with a
+> daily trigger.  What follows is what was originally argued, and why it turned
+> out to be solving a non-problem.
 
 `GetDefaultTriggers()` returning no triggers makes a task manual by default, but
 an administrator can still add a schedule later.  A single task whose saved
@@ -69,6 +91,20 @@ Use two tasks:
 
 Both tasks return an empty trigger list.  The second task remains safe even if a
 trigger is added accidentally.
+
+**Why this was wrong.** Repeating a write is not a hazard here, because a repeat
+is not a write at all.  Jellyfin *zeroes* user-data rows on clear rather than
+deleting them, so a target a user has since cleared reads as a populated row in
+default state, classifies as `current_state_conflict`, and is skipped — measured,
+not assumed.  A target that was already recovered classifies as `already_applied`.
+Either way a second run issues no writes and needs no ledger to know that: the
+memory is the target's own rows.  The design is stateless.
+
+Repeat runs are not merely harmless, they are the point.  Jellyfin reattaches
+user data to the item at a new path by provider id, but only if that item is
+already identified when the old one is removed; when identification lags the
+move, the rows strand and Jellyfin never gets a second chance.  A nightly task
+does.  The harness asserts exactly this sequence.
 
 ---
 
@@ -336,7 +372,20 @@ apply task in Milestone 3.
 11. Uninstall the plugin when satisfied, or leave it inert with no arm and no
     triggers.
 
-### 6.3 Arming
+### 6.3 Arming — REMOVED, NOT IMPLEMENTED
+
+> No arming ceremony exists.  The configuration page has library checkboxes, a
+> Save button, and a Run now button; there is no phrase to type, no expiry, and
+> no backup acknowledgement.
+>
+> It was defending against an administrator adding a schedule to the apply task
+> and turning a one-time recovery into something that repeats writes forever.
+> That is now the intended mode of operation, and the two guards that actually
+> matter — `current_state_conflict` on the plan side and a re-read of the target
+> immediately before each write — make it safe without a ceremony.  A ceremony
+> that must be performed nightly is not a safety control, it is an outage.
+>
+> The rest of this section records what was designed.
 
 The configuration page displays a phrase such as:
 

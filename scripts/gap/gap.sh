@@ -551,6 +551,13 @@ item_provider_id() {
         | jq -r --arg p "$2" '.Items[0].ProviderIds[$p] // "none"'
 }
 
+# By path, not by name: an unidentified item is named from whatever the scanner
+# parsed out of the filename, which is not something to pin an assertion on.
+find_movie_by_path() {
+    api_ok GET "/Items?userId=$ADMIN_ID&recursive=true&includeItemTypes=Movie&fields=Path" \
+        | jq -r --arg p "$1" '.Items[] | select(.Path == $p) | .Id' | head -1
+}
+
 # POST /UserItems/{id}/UserData is the current route; the /Users/{uid}/... form
 # is the pre-10.9 spelling and is still accepted on some builds.
 set_user_data() {
@@ -727,6 +734,88 @@ strand_data() {
 
 # One task now: it analyses and restores in the same pass, and leaves the plan
 # behind as a record of what it did rather than as input to a later step.
+# Why this task runs every night instead of once.
+#
+# Jellyfin does reattach user data to the item at the new path all by itself --
+# but only when that item is already identified at the moment the old one is
+# removed. Move a title with its NFO alongside and the new item is born carrying
+# its provider ids in the same pass, Jellyfin merges, and there is no gap at all.
+# Take the identity away and the merge has nothing to aim at, so the rows strand.
+#
+# Identification then arrives later, on a metadata pass. Jellyfin gets exactly
+# one chance and has already missed it; this task gets another one every night.
+# That lag, not repeat stranding, is what the schedule is for.
+verify_identification_lag() {
+    step "It waits for identification, then restores"
+
+    local pre_admin pre_viewer before_count after_count
+    pre_admin=$(get_user_data "$ADMIN_ID" "$NEW_MOVIE_ID" | normalize_state)
+    pre_viewer=$(get_user_data "$VIEWER_ID" "$NEW_MOVIE_ID" | normalize_state)
+    info "state about to be stranded again: $pre_admin"
+
+    stop_server
+    before_count=$(sentinel_count)
+    start_server
+    authenticate admin "$ADMIN_PW"
+
+    local dir new_dir new_path
+    dir="$MEDIA/cold/movies/The Matrix (1999)"
+    new_dir="$MEDIA/cold/movies/The Matrix (1999) [remux]"
+    new_path="$new_dir/The Matrix (1999) [remux].mp4"
+    [ -d "$dir" ] || die "expected the restored movie at $dir"
+    mv "$dir" "$new_dir"
+    mv "$new_dir/The Matrix (1999).mp4" "$new_path"
+    rm -f "$new_dir/movie.nfo"
+    info "moved again, this time leaving its NFO behind"
+
+    scan_library
+    scan_library
+
+    stop_server
+    after_count=$(sentinel_count)
+    start_server
+    authenticate admin "$ADMIN_PW"
+    info "sentinel rows: $before_count -> $after_count"
+    [ "$after_count" -gt "$before_count" ] \
+        || die "the second move stranded nothing, so there is no identification lag to test.
+  Jellyfin reattached the rows even without an NFO, which would make this phase meaningless."
+    pass "a move without identity strands the rows again"
+
+    local unidentified
+    unidentified=$(find_movie_by_path "$new_path")
+    [ -n "$unidentified" ] || die "the moved file did not come back as an item at $new_path"
+    require "the new item has no provider id to match on" none "$(item_provider_id "$unidentified" Imdb)"
+    require "and carries no user state" \
+        "played=false count=0 ticks=0 fav=false rating=none last=none" \
+        "$(get_user_data "$ADMIN_ID" "$unidentified" | normalize_state)"
+
+    restore "run while the target is unidentified"
+    require "it restores nothing it cannot identify" 0 "$(planned_writes)"
+    [ "$(row_reason_count no_current_key_match)" -gt 0 ] \
+        || die "the run wrote nothing, but not because the key was unmatched.
+  rowCounts: $(jq -c '.summary.rowCounts' "$PLAN")"
+    pass "and says the stranded keys matched no current item"
+
+    # The metadata pass that eventually identifies the item. Internet providers
+    # are off in this harness, so putting the NFO back is the only way to say
+    # "identification arrived" without depending on the network.
+    write_movie_nfo "$new_dir" "The Matrix" 1999 603 tt0133093
+    scan_library
+    unidentified=$(find_movie_by_path "$new_path")
+    require "identification arrives on a later pass" tt0133093 "$(item_provider_id "$unidentified" Imdb)"
+
+    restore "run after identification arrived"
+    [ "$(planned_writes)" -gt 0 ] \
+        || die "the target is identified and empty, but the run still issued no writes.
+  This is the case the nightly schedule exists for."
+    pass "the next nightly run picks it up"
+
+    verify_restored "movie / admin, recovered after the lag"  "$ADMIN_ID"  "$unidentified" "$pre_admin"
+    verify_restored "movie / viewer, recovered after the lag" "$VIEWER_ID" "$unidentified" "$pre_viewer"
+
+    NEW_MOVIE_ID=$unidentified
+}
+
 restore() {
     run_task_by_key "$TASK_KEY" "${1:-restore}"
     require "the run completed" Completed "$TASK_STATUS"
@@ -740,6 +829,11 @@ restore() {
 planned_writes() { jq -r '.writes | length' "$PLAN"; }
 ready_count() { jq -r '.summary.candidateCounts.ready' "$PLAN"; }
 reason_count() { jq -r --arg r "$1" '.summary.candidateCounts[$r] // 0' "$PLAN"; }
+
+# Source rows are classified separately from candidates: a stranded row that
+# matches no current item never becomes a candidate at all, so its reason only
+# ever shows up here.
+row_reason_count() { jq -r --arg r "$1" '.summary.rowCounts[$r] // 0' "$PLAN"; }
 
 verify_restored() {
     local label=$1 user=$2 item=$3 expected=$4 actual
@@ -916,6 +1010,12 @@ run_line() {
 
     stop_server
     require "and the stranded rows are still there at the end of it all" "$sentinel_before" "$(sentinel_digest)"
+
+    # Deliberately last: this phase strands a second batch of rows, so it has to
+    # run after the assertion that the first batch survived untouched.
+    start_server
+    authenticate admin "$ADMIN_PW"
+    verify_identification_lag
 
     local complaints
     complaints=$(tail -n "+$((log_mark + 1))" "$SERVER_LOG" | grep -cE '\[(ERR|FTL)\]' || true)

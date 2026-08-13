@@ -35,8 +35,16 @@ years ago.
 
 ## What it does not do
 
-- **It does not prevent future loss.** Move your files again and the same thing
-  happens. This is a one-time cleanup, not protection.
+- **It does not prevent future loss.** It cleans up after a move, it does not
+  stop one from stranding data in the first place.
+- **It cannot see user data parked on a dead item.** When a folder drains
+  completely, Jellyfin defers removing the items that lived there — they stay in
+  the library holding their user data even though the files are gone. Those rows
+  are not detached yet, so this plugin cannot consider them. They become
+  recoverable on their own once something lands in that folder and the next scan
+  removes the items. Run [`scripts/parked-userdata.sh`](scripts/parked-userdata.sh)
+  to see whether you have any; it is read-only and safe to run while Jellyfin is
+  up.
 - **It does not reconstruct your watch history.** Jellyfin keeps only the most
   recent stranded snapshot per title, not every state it ever had.
 - **It does not guess.** A stranded row is only restored when it maps to exactly
@@ -55,8 +63,12 @@ finds the stranded rows, works out which item each belongs to now, and restores
 them in the same pass. It leaves a plan file behind recording exactly what it did
 and giving a reason for everything it skipped.
 
-Leave it installed. Media that moves once moves again, and the whole point is
-that you stop thinking about it.
+Leave it installed, and run it nightly rather than once. Jellyfin does reattach
+user data to the item at a new path by provider id — but only if that item is
+already identified at the moment the old one is removed. When identification lags
+the move, which is the normal case for a library without NFO files, the rows
+strand and Jellyfin never gets a second chance. This task gets one every night,
+and picks the item up as soon as its provider IDs arrive.
 
 Running it repeatedly is safe by construction, not by promise:
 
