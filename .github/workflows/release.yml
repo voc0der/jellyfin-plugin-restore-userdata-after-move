@@ -145,7 +145,9 @@ jobs:
         git config user.name "voc0der"
         git config user.email "contact@netspace.in"
         git add manifest.json
-        git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+        # Conventional subject, same as every hand-written commit: CONTRIBUTING
+        # sets one naming rule and a bot is not exempt from it.
+        git commit -m "chore(release): update manifest.json for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
 
         # A swallowed push failure is how 1.0.0.4 ended up released but absent
         # from the catalogue. Rebase onto whatever landed meanwhile and retry;
