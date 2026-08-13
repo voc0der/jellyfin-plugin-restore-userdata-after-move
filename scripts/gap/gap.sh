@@ -285,40 +285,57 @@ trap cleanup EXIT INT TERM
 
 # Reads the database, and only ever with the server stopped.
 #
-# This is not caution, it is a measured property of the server: while Jellyfin
-# 10.11 is running there is no -wal file on disk, the main database file does
-# not grow, and a second process reading it sees an empty UserData table. The
-# rows appear only once the server shuts down. Reading live therefore does not
-# fail loudly — it silently reports nothing, which would make every assertion
-# about stranded rows pass vacuously. The guard below is what stops that from
-# ever happening again.
+# Opening this database from another process while Jellyfin is running does not
+# just give a wrong answer -- it takes the server down. Measured, not feared:
+#
+# Jellyfin runs SQLite with its NoLock behaviour, so there is no -shm file and
+# the WAL index lives in the server's heap. A second connection that opens the
+# database checkpoints and truncates the -wal when it closes. The server's
+# in-memory index still points into the frames that were just deleted, so its
+# next read runs off the end of a now-empty file:
+#
+#   pread64(jellyfin.db-wal, 4096 bytes @ 679856) -> 0, filesize=0
+#
+# SQLite turns that short read into SQLITE_IOERR_SHORT_READ and reports it as
+# "disk I/O error". Every later query fails the same way and the server dies
+# with an unhandled exception during its next library scan. It reads as a
+# storage fault and is nothing of the kind.
+#
+# So: every read happens with the server stopped, and this guard is what keeps
+# it that way.
 db() {
     [ -z "$SERVER_PID" ] || die "internal error: tried to read the database while the server was running.
-  Jellyfin does not make its writes visible to another process until it stops,
-  so that read would have reported an empty table and quietly passed."
+  That truncates the WAL underneath Jellyfin and kills the server a few seconds later."
 
     sqlite3 -cmd '.timeout 10000' "$DBFILE" "$1" \
         || die "query against $DBFILE failed: $1"
 }
 
+# Finds the database by name alone. Deliberately does not open it: this runs
+# with the server up, and opening it here is exactly the mistake described
+# above. Whether it really is the right database is settled by
+# assert_readable_database, in the first stopped window.
 locate_db() {
     local candidate
     while IFS= read -r candidate; do
-        if sqlite3 "$candidate" \
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='UserData';" 2>/dev/null | grep -q 1; then
+        if [ "$(basename "$candidate")" = "jellyfin.db" ] || [ "$(basename "$candidate")" = "library.db" ]; then
             DBFILE="$candidate"
             info "database: ${DBFILE#$SCRATCH/}"
             return 0
         fi
     done < <(find "$DATA" -maxdepth 3 -name '*.db' 2>/dev/null)
-    die "no database with a UserData table under $DATA"
+    die "no jellyfin.db or library.db under $DATA"
 }
 
 # Jellyfin's EF provider stores Guid as TEXT on SQLite. Verified rather than
 # assumed, so a future provider change surfaces here instead of silently
 # matching nothing and reporting a clean run.
 assert_readable_database() {
-    local kind rows
+    local kind rows table
+    table=$(db "SELECT name FROM sqlite_master WHERE type='table' AND name='UserData';")
+    [ "$table" = "UserData" ] \
+        || die "$DBFILE has no UserData table, so it is not the database the server keeps user state in."
+
     rows=$(db "SELECT COUNT(*) FROM UserData;")
     [ "${rows:-0}" -gt 0 ] \
         || die "UserData is empty after seeding state for two users on three titles.

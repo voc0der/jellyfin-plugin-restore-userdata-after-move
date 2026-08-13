@@ -67,15 +67,35 @@ library that was never broken proves nothing.
 
 ## One thing worth knowing before you extend it
 
-**You cannot read Jellyfin's database while Jellyfin is running.** Not "you
-shouldn't" — you get the wrong answer. With the server up there is no `-wal` file
-on disk, the main database does not grow, and a second process querying it sees
-an empty `UserData` table. The rows appear only after the server shuts down.
+**Do not open Jellyfin's database from another process while Jellyfin is
+running.** Not "prefer not to" — it takes the server down, and it does not look
+like your fault when it does.
 
-That is the worst possible failure mode for a harness, because it does not error:
-every assertion about stranded rows would pass against a table that reads as
-empty. So `gap.sh` stops the server around each database read, and `db()` refuses
-outright if the server is up. Keep that guard.
+Jellyfin runs SQLite with its `NoLock` behaviour. There is no `-shm` file, so the
+WAL index lives in the server's heap rather than in shared memory where other
+connections could invalidate it. A second connection that opens the database
+checkpoints and truncates the `-wal` when it closes. The server's in-memory index
+still points into the frames that were just deleted, and its next read runs off
+the end of a now-empty file:
+
+```
+pread64(jellyfin.db-wal, 4096 bytes @ 679856) -> 0, filesize=0
+```
+
+SQLite turns that short read into `SQLITE_IOERR_SHORT_READ` and reports it as
+**"disk I/O error"**. Every subsequent query fails identically and the server
+exits with an unhandled exception, typically seconds later during a library scan
+— far enough from the cause to look like failing storage.
+
+This cost about an hour of chasing a phantom. The harness had a guard on `db()`
+from early on, but `locate_db` opened the database directly to check for a
+`UserData` table, which slipped straight past it. Both are fixed: reads happen
+only with the server stopped, `db()` refuses otherwise, and the database is now
+located by filename with its contents verified later, in a stopped window.
+
+A secondary consequence, same root: with the server up a second reader sees an
+*empty* `UserData` table. That failure is silent, so every assertion about
+stranded rows would pass vacuously. Keep the guard.
 
 ## Requirements
 
