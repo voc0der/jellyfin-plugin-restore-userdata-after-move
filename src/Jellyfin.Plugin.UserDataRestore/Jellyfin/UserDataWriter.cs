@@ -3,6 +3,7 @@ using Jellyfin.Plugin.UserDataRestore.Core.Model;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 
 namespace Jellyfin.Plugin.UserDataRestore.Jellyfin;
 
@@ -33,15 +34,13 @@ public sealed class UserDataWriter(IUserDataManager userDataManager)
     /// stranded row: the row's key is how the snapshot was found, not where it
     /// belongs now. Jellyfin fans a save out across the item's own keys.
     /// </remarks>
-    public static UserItemDataDto ToDto(RecoveryState state, BaseItem item)
+    public static UpdateUserItemDataDto ToDto(RecoveryState state, BaseItem item)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(item);
 
-        return new UserItemDataDto
+        return new UpdateUserItemDataDto
         {
-            Key = item.GetUserDataKeys()[0],
-            ItemId = item.Id,
             Played = state.Played,
             PlayCount = state.PlayCount,
             PlaybackPositionTicks = state.PlaybackPositionTicks,
@@ -49,6 +48,26 @@ public sealed class UserDataWriter(IUserDataManager userDataManager)
             LastPlayedDate = state.LastPlayedDate,
             Rating = state.Rating,
         };
+    }
+
+    /// <summary>
+    /// Restores state onto an item, through the manager and nothing else.
+    /// </summary>
+    /// <param name="user">The user to restore for.</param>
+    /// <param name="item">The target item.</param>
+    /// <param name="state">The state to write.</param>
+    /// <remarks>
+    /// Absolute values, never toggles or increments (DESIGN §9.2): a retry of the
+    /// same write has to land on the same result. The partial-update DTO leaves
+    /// the current audio and subtitle selections alone.
+    /// </remarks>
+    public void Save(User user, BaseItem item, RecoveryState state)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(state);
+
+        _userDataManager.SaveUserData(user, item, ToDto(state, item), UserDataSaveReason.UpdateUserData);
     }
 
     /// <summary>

@@ -83,6 +83,44 @@ public sealed class PlanStore(string directory)
     }
 
     /// <summary>
+    /// Reads a stored plan back by its ID.
+    /// </summary>
+    /// <param name="planId">The full plan ID.</param>
+    /// <returns>The plan, or <see langword="null"/> if no stored file carries it.</returns>
+    /// <remarks>
+    /// Matched on the ID inside the file, not on the file name. The name carries a
+    /// short prefix for humans; what authorizes an apply is the full ID.
+    /// </remarks>
+    public PlanDocument? Read(string planId)
+    {
+        if (string.IsNullOrEmpty(planId))
+        {
+            return null;
+        }
+
+        foreach (var stored in List())
+        {
+            PlanDocument plan;
+
+            try
+            {
+                plan = PlanCanonicalizer.FromJson(File.ReadAllText(stored.Path));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                continue;
+            }
+
+            if (string.Equals(plan.PlanId, planId, StringComparison.Ordinal))
+            {
+                return plan;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Deletes all but the newest plans.
     /// </summary>
     /// <param name="keep">How many to keep. Values below one keep one.</param>
