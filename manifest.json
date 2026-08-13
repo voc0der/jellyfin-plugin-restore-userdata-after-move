@@ -9,6 +9,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.0.7",
+        "changelog": "## What's Changed\n\n- fix(gap): stop the harness from killing the server it tests (7403b05)\n- docs: stop describing the plugin as analysis-only (5901e7d)\n- test(gap): prove the apply path against real Jellyfin servers (c4e7407)\n- refactor(apply): drop the arm, the API, and the confirmation ceremony (685534d)\n- feat(apply): add arming, whole-plan preflight, and the apply task (8f57a42)\n- feat(apply): add the IUserDataManager write adapter (96e18e6)\n- docs(evidence): record the first real-installation analysis run (78e8af0)\n- Update manifest.json for version 1.0.0.6 (4440c20)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.6...1.0.0.7\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.7/RestoreUserDataAfterMove_1.0.0.7_jellyfin-10.11.11.zip",
+        "checksum": "5ac9687debf5459558c8ab668daa8d90",
+        "timestamp": "2026-08-13T10:58:42Z"
+      },
+      {
         "version": "1.0.0.6",
         "changelog": "## What's Changed\n\n- fix(release): serialize runs and pin the tag to the built commit (8f4f983)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.5...1.0.0.6\n",
         "targetAbi": "10.11.11.0",
