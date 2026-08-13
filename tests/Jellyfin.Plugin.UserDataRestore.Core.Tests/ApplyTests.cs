@@ -7,7 +7,7 @@ using Jellyfin.Plugin.UserDataRestore.Core.Verification;
 namespace Jellyfin.Plugin.UserDataRestore.Core.Tests;
 
 /// <summary>
-/// Arming and whole-plan preflight (DESIGN §6.3, §9.1).
+/// Whole-plan preflight (DESIGN §9.1).
 /// </summary>
 public class ApplyTests
 {
@@ -87,70 +87,6 @@ public class ApplyTests
 
         Assert.False(result.MayProceed);
         Assert.Contains(result.Blockers, blocker => blocker.Contains("does not match its own ID", StringComparison.Ordinal));
-    }
-
-    [Theory]
-    [InlineData("wrong-plan", 1, "server", "10.11.11", true, "not the plan")]
-    [InlineData("plan", 2, "server", "10.11.11", true, "were authorized")]
-    [InlineData("plan", 1, "other", "10.11.11", true, "different server")]
-    [InlineData("plan", 1, "server", "12.0.0", true, "when armed")]
-    [InlineData("plan", 1, "server", "10.11.11", false, "backup acknowledgement")]
-    public void AnArmIsRefusedWhenAnythingAboutItDisagrees(
-        string planId,
-        int writeCount,
-        string serverId,
-        string serverVersion,
-        bool backup,
-        string expected)
-    {
-        var arm = new ArmState
-        {
-            PlanId = planId,
-            ExpectedWriteCount = writeCount,
-            ServerId = serverId,
-            ServerVersion = serverVersion,
-            ArmedUtc = Now,
-            ExpiresUtc = Now.AddMinutes(15),
-            BackupAcknowledged = backup,
-        };
-
-        var verdict = ArmValidator.Validate(arm, "plan", 1, "server", "10.11.11", Now);
-
-        Assert.False(verdict.IsValid);
-        Assert.Contains(expected, verdict.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AnExpiredArmIsRefused()
-    {
-        var arm = new ArmState
-        {
-            PlanId = "plan",
-            ExpectedWriteCount = 1,
-            ServerId = "server",
-            ServerVersion = "10.11.11",
-            ArmedUtc = Now,
-            ExpiresUtc = Now.AddMinutes(15),
-            BackupAcknowledged = true,
-        };
-
-        Assert.True(ArmValidator.Validate(arm, "plan", 1, "server", "10.11.11", Now.AddMinutes(14)).IsValid);
-        Assert.False(ArmValidator.Validate(arm, "plan", 1, "server", "10.11.11", Now.AddMinutes(16)).IsValid);
-    }
-
-    [Fact]
-    public void NothingArmedMeansNothingApplies()
-    {
-        Assert.False(ArmValidator.Validate(null, "plan", 1, "server", "10.11.11", Now).IsValid);
-        Assert.False(ArmValidator.Validate(new ArmState(), "plan", 1, "server", "10.11.11", Now).IsValid);
-    }
-
-    [Fact]
-    public void ThePhraseNamesThePlanAndTheWriteCount()
-    {
-        // An operator confirming "yes" to an abstract question has confirmed
-        // nothing. The phrase carries what they are authorizing.
-        Assert.Equal("APPLY 3f17c4a9b28e 428", ArmState.Phrase("3f17c4a9b28e0011223344", 428));
     }
 
     private static PlanDocument BuildPlan(IReadOnlyList<DetachedUserDataRow> rows)

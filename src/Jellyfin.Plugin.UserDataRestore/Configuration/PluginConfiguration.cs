@@ -1,4 +1,3 @@
-using Jellyfin.Plugin.UserDataRestore.Core.Applying;
 using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.UserDataRestore.Configuration;
@@ -42,14 +41,4 @@ public class PluginConfiguration : BasePluginConfiguration
     /// debug level. The plan file always holds the full detail.
     /// </summary>
     public bool VerboseLogging { get; set; }
-
-    /// <summary>
-    /// Gets or sets the one-time authorization for an apply run (DESIGN §6.3).
-    /// </summary>
-    /// <remarks>
-    /// Cleared and persisted by the apply task before its first write, so a crash
-    /// mid-run cannot be retried without an administrator looking at the result
-    /// first.
-    /// </remarks>
-    public ArmState Arm { get; set; } = new();
 }

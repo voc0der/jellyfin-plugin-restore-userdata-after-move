@@ -17,10 +17,10 @@ namespace Jellyfin.Plugin.UserDataRestore.ScheduledTasks;
 /// Apply detached user-data recovery (DESIGN §9).
 /// </summary>
 /// <remarks>
-/// <para>Refuses to run unless an administrator armed a specific plan on a
-/// specific server within the last few minutes, and the world still matches that
-/// plan in every respect preflight can check. The arm is consumed before the
-/// first write.</para>
+/// <para>Applies the newest plan the analysis wrote, after re-running that
+/// analysis and confirming the world still matches it in every respect. Running
+/// this task is the deliberate act; it has no triggers and nothing schedules
+/// it.</para>
 /// <para>Every write goes through <see cref="IUserDataManager"/> and is read back
 /// and verified. The stranded rows are never touched: they are the only remaining
 /// copy of this state, and leaving them intact is what makes a failed run
@@ -68,7 +68,7 @@ public class ApplyDetachedUserDataTask : IScheduledTask
 
     /// <inheritdoc />
     public string Description =>
-        "Restores the recoverable user data found by the analysis, through Jellyfin's own user-data manager. Requires a plan armed on the configuration page within the last few minutes.";
+        "Restores the recoverable user data found by the analysis, through Jellyfin's own user-data manager. Re-checks everything the plan assumed before writing anything.";
 
     /// <inheritdoc />
     public string Category => "Restore User Data After Move";
@@ -87,31 +87,15 @@ public class ApplyDetachedUserDataTask : IScheduledTask
         var plugin = Plugin.Instance
             ?? throw new InvalidOperationException("The plugin instance is not available.");
         var configuration = plugin.Configuration;
-        var arm = configuration.Arm;
+        var stored = new PlanStore(plugin.PlanDirectory).List();
 
-        if (!arm.IsPresent)
+        if (stored.Count == 0)
         {
             throw new InvalidOperationException(
-                "Nothing is armed. Review a plan on the plugin's configuration page and arm it before running this task.");
+                "No plan has been written. Run the analysis first.");
         }
 
-        var store = new PlanStore(plugin.PlanDirectory);
-        var plan = store.Read(arm.PlanId)
-            ?? throw new InvalidOperationException(
-                string.Create(CultureInfo.InvariantCulture, $"The armed plan {arm.PlanId} is not in the plan directory."));
-
-        var verdict = ArmValidator.Validate(
-            arm,
-            plan.PlanId,
-            plan.Writes.Count,
-            _applicationHost.SystemId,
-            _applicationHost.ApplicationVersionString,
-            DateTimeOffset.UtcNow);
-
-        if (!verdict.IsValid)
-        {
-            throw new InvalidOperationException(verdict.Reason);
-        }
+        var plan = PlanCanonicalizer.FromJson(File.ReadAllText(stored[0].Path));
 
         var reader = new UserDataReader(_dbFactory);
         await reader.EnsureModelCompatibleAsync(cancellationToken).ConfigureAwait(false);
@@ -135,13 +119,9 @@ public class ApplyDetachedUserDataTask : IScheduledTask
             throw new InvalidOperationException(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"Preflight refused this run: {preflight.Blockers.Count} precondition(s) changed since the plan was written. Re-run the analysis and arm the new plan."));
+                    $"Preflight refused this run: {preflight.Blockers.Count} precondition(s) changed since the plan was written. Run the analysis again."));
         }
 
-        // Consumed before the first write, and persisted, so a crash cannot be
-        // retried without an administrator reviewing what happened (DESIGN §6.3).
-        configuration.Arm = new ArmState();
-        plugin.UpdateConfiguration(configuration);
         progress.Report(35);
 
         var pending = preflight.Pending.ToArray();
