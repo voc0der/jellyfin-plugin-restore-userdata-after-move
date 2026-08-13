@@ -92,6 +92,69 @@ jobs:
         path: artifacts/*.zip
         if-no-files-found: ignore
 
+    # The release is created before manifest.json is touched, and that ordering is
+    # load-bearing. The manifest *is* the plugin catalogue — it is served straight
+    # off main — so a manifest commit that lands before a failed `gh release create`
+    # advertises a version whose download URL 404s and whose checksum matches
+    # nothing. That is not hypothetical: on run 31747724320 the release failed on an
+    # already-existing tag and left 1.0.0.8 published against an archive that was
+    # never uploaded. Failing here instead leaves the catalogue exactly as it was.
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+
+        {
+          cat CHANGELOG.md
+          echo ""
+          echo "## Which archive do I want?"
+          echo ""
+          echo "| Jellyfin | Archive |"
+          echo "|---|---|"
+          echo "| 10.11.11 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip\` — also available in the plugin catalogue |"
+          echo "| 12.0 RC5 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0-rc5.zip\` — manual install |"
+          echo ""
+          echo "Builds are pinned per server version and the plugin refuses to run on"
+          echo "the wrong one, so pick the archive matching your exact server."
+        } > RELEASE_NOTES.md
+
+        # --target pins the tag to the commit these artifacts were built from.
+        # Without it the tag lands on main's current tip, which is not the same
+        # thing once a second merge is in flight.
+        gh release create "$VERSION" \
+          --title "Release $VERSION" \
+          --notes-file RELEASE_NOTES.md \
+          --target "${{ github.sha }}" \
+          artifacts/*.zip
+
+    # A created release is not the same as a complete one: a partial or dropped
+    # asset upload does not fail `gh release create`. The catalogue is about to
+    # promise a byte-exact checksum for one of these URLs, so fetch them back and
+    # prove the promise before making it.
+    - name: Verify the published archives
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        rm -rf published && mkdir -p published
+        gh release download "$VERSION" --dir published --clobber
+
+        for local in artifacts/*.zip; do
+          name=$(basename "$local")
+          if [ ! -f "published/${name}" ]; then
+            echo "::error::${name} is missing from release ${VERSION}"
+            exit 1
+          fi
+          if ! cmp -s "$local" "published/${name}"; then
+            echo "::error::${name} on release ${VERSION} differs from the archive that was built"
+            exit 1
+          fi
+          echo "verified ${name}"
+        done
+
     # Only the 10.11.11 build is published to the plugin catalogue. Jellyfin
     # treats targetAbi as a *minimum*, so listing both builds under one version
     # would make each of them look installable on a 12.0 server, and the server
@@ -102,14 +165,16 @@ jobs:
       run: |
         VERSION="${{ steps.version.outputs.version }}"
         ZIP_NAME="RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip"
-        CHECKSUM=$(md5sum "artifacts/${ZIP_NAME}" | awk '{print $1}')
         TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         REPO="${{ github.repository }}"
 
-        # Taken from the archive rather than written here, so the catalogue can
-        # never disagree with what the plugin actually declares.
-        TARGET_ABI=$(unzip -p "artifacts/${ZIP_NAME}" '*/meta.json' | jq -r .targetAbi)
-        echo "targetAbi from artifact: ${TARGET_ABI}"
+        # Both taken from the archive as the release serves it, not from the local
+        # build output: the catalogue's checksum then describes the exact bytes
+        # behind the URL it publishes, and the ABI cannot disagree with what the
+        # plugin itself declares.
+        CHECKSUM=$(md5sum "published/${ZIP_NAME}" | awk '{print $1}')
+        TARGET_ABI=$(unzip -p "published/${ZIP_NAME}" '*/meta.json' | jq -r .targetAbi)
+        echo "targetAbi from published artifact: ${TARGET_ABI}"
 
         jq --arg version "$VERSION" \
            --rawfile changelog CHANGELOG.md \
@@ -163,33 +228,3 @@ jobs:
 
         echo "::error::Could not push the manifest update after 3 attempts"
         exit 1
-
-    - name: Create Release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        VERSION="${{ steps.version.outputs.version }}"
-
-        {
-          cat CHANGELOG.md
-          echo ""
-          echo "## Which archive do I want?"
-          echo ""
-          echo "| Jellyfin | Archive |"
-          echo "|---|---|"
-          echo "| 10.11.11 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip\` — also available in the plugin catalogue |"
-          echo "| 12.0 RC5 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0-rc5.zip\` — manual install |"
-          echo ""
-          echo "Builds are pinned per server version and the plugin refuses to run on"
-          echo "the wrong one, so pick the archive matching your exact server."
-        } > RELEASE_NOTES.md
-
-        # --target pins the tag to the commit these artifacts were built from.
-        # Without it the tag lands on main's current tip, which is not the same
-        # thing once a second merge is in flight.
-        gh release create "$VERSION" \
-          --title "Release $VERSION" \
-          --notes-file RELEASE_NOTES.md \
-          --target "${{ github.sha }}" \
-          artifacts/*.zip
