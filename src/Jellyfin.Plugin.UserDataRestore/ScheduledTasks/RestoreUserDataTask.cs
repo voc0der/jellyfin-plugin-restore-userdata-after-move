@@ -255,13 +255,7 @@ public class RestoreUserDataTask : IScheduledTask
         }
 
         var writer = new UserDataWriter(_userDataManager);
-
-        // Read now rather than reused from the analysis pass. This map is what each
-        // target's library membership is re-checked against, and checking a target
-        // against the same stale answer that admitted it checks nothing.
-        var membership = new LibraryItemCollector(_libraryManager)
-            .BuildMembership(options.EligibleLibraryIds, cancellationToken);
-
+        var collector = new LibraryItemCollector(_libraryManager);
         var counts = default(AppliedCounts);
 
         for (var index = 0; index < writes.Count; index++)
@@ -284,7 +278,7 @@ public class RestoreUserDataTask : IScheduledTask
                 break;
             }
 
-            counts = await ApplyAsync(writer, reader, writes[index], options, membership, counts, cancellationToken)
+            counts = await ApplyAsync(writer, reader, collector, writes[index], options, counts, cancellationToken)
                 .ConfigureAwait(false);
             progress.Report(50 + (45.0 * (index + 1) / writes.Count));
         }
@@ -302,15 +296,15 @@ public class RestoreUserDataTask : IScheduledTask
     private async Task<AppliedCounts> ApplyAsync(
         UserDataWriter writer,
         UserDataReader reader,
+        LibraryItemCollector collector,
         PlannedWrite write,
         AnalysisOptions options,
-        IReadOnlyDictionary<Guid, List<Guid>> membership,
         AppliedCounts counts,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await ApplyCoreAsync(writer, reader, write, options, membership, counts, cancellationToken)
+            return await ApplyCoreAsync(writer, reader, collector, write, options, counts, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -327,9 +321,9 @@ public class RestoreUserDataTask : IScheduledTask
     private async Task<AppliedCounts> ApplyCoreAsync(
         UserDataWriter writer,
         UserDataReader reader,
+        LibraryItemCollector collector,
         PlannedWrite write,
         AnalysisOptions options,
-        IReadOnlyDictionary<Guid, List<Guid>> membership,
         AppliedCounts counts,
         CancellationToken cancellationToken)
     {
@@ -349,8 +343,9 @@ public class RestoreUserDataTask : IScheduledTask
         // now. The analysis ran seconds ago, but a metadata refresh can rewrite an
         // item's provider IDs in that time — and the keys those IDs produce are the
         // entire identity argument for writing here. An item that has stopped
-        // answering to them is not the item the evidence was about.
-        var snapshot = LibraryItemCollector.Snapshot(item, membership, options.RequirePathExists);
+        // answering to them is not the item the evidence was about. Membership and
+        // path come off the live item too, not out of a map built before the loop.
+        var snapshot = collector.Snapshot(item, options.EligibleLibraryIds, options.RequirePathExists);
         if (TargetRevalidation.Evaluate(snapshot, options, write.SourceKeys) is { } disqualification)
         {
             _logger.LogWarning(

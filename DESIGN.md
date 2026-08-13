@@ -683,7 +683,10 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
    still reports every detached key the stranded rows matched on.  A metadata
    refresh landing between analysis and write can replace an item's provider IDs,
    and the item that answers to different keys is not the item the evidence was
-   about.
+   about.  Every one of these is read from the live item, including library
+   membership, which is asked of the item's own ancestors rather than looked up in
+   a map built earlier in the run: checking a target against the same photograph
+   that admitted it checks nothing.
 4. Re-query `UserData` row *existence* for the exact pair, against the database
    rather than through `IUserDataManager`.  The manager reports "no row" and "a
    row holding defaults" identically, and the difference between them is the

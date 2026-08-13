@@ -85,37 +85,46 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
     }
 
     /// <summary>
-    /// Snapshots one item the caller already holds.
+    /// Snapshots one item the caller already holds, reading every fact live.
     /// </summary>
     /// <param name="item">The item, freshly read from the library manager.</param>
-    /// <param name="membership">Library membership, from <see cref="BuildMembership"/>.</param>
+    /// <param name="configuredLibraryIds">The libraries an operator marked eligible.</param>
     /// <param name="checkPathExists">Whether to stat the media file.</param>
     /// <returns>The snapshot.</returns>
     /// <remarks>
-    /// For revalidating a single recovery target immediately before writing to it,
-    /// where re-collecting the whole catalogue would cost more than the run. The
-    /// owning series' provider IDs are left empty: they only classify a key's
-    /// identity evidence, which was settled during analysis, and nothing that
-    /// reads this snapshot looks at them.
+    /// <para>For revalidating a single recovery target immediately before writing
+    /// to it, where re-collecting the whole catalogue would cost more than the
+    /// run.</para>
+    /// <para>Library membership is asked of the item itself rather than looked up
+    /// in a map built earlier in the run. A map is a photograph, and checking a
+    /// target against the same photograph that admitted it checks nothing; one
+    /// indexed walk up this item's ancestors is both cheaper and actually
+    /// current.</para>
+    /// <para>The owning series' provider IDs are left empty: they only classify a
+    /// key's identity evidence, which was settled during analysis, and nothing that
+    /// reads this snapshot looks at them.</para>
     /// </remarks>
-    public static CurrentItemSnapshot Snapshot(
+    public CurrentItemSnapshot Snapshot(
         BaseItem item,
-        IReadOnlyDictionary<Guid, List<Guid>> membership,
+        IReadOnlyList<Guid> configuredLibraryIds,
         bool checkPathExists)
     {
         ArgumentNullException.ThrowIfNull(item);
-        ArgumentNullException.ThrowIfNull(membership);
+        ArgumentNullException.ThrowIfNull(configuredLibraryIds);
+
+        var configured = configuredLibraryIds.ToHashSet();
+        var membership = new Dictionary<Guid, List<Guid>>
+        {
+            [item.Id] = [.. _libraryManager.GetCollectionFolders(item)
+                .Select(folder => folder.Id)
+                .Where(configured.Contains)
+                .Distinct()],
+        };
 
         return ToSnapshot(item, membership, new Dictionary<Guid, Dictionary<string, string>>(), checkPathExists);
     }
 
-    /// <summary>
-    /// Maps each item in the configured libraries to the libraries holding it.
-    /// </summary>
-    /// <param name="configuredLibraryIds">The libraries an operator marked eligible.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>Item ID to the library IDs containing it.</returns>
-    public Dictionary<Guid, List<Guid>> BuildMembership(
+    private Dictionary<Guid, List<Guid>> BuildMembership(
         IReadOnlyList<Guid> configuredLibraryIds,
         CancellationToken cancellationToken)
     {
