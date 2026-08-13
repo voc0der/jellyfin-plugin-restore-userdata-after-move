@@ -9,6 +9,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.0.12",
+        "changelog": "## What's Changed\n\n- ci(release): use a conventional subject for the manifest bump (d752463)\n- Update manifest.json for version 1.0.0.11 (c5b826f)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.11...1.0.0.12\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.12/RestoreUserDataAfterMove_1.0.0.12_jellyfin-10.11.11.zip",
+        "checksum": "c61dcb40347ce19b613ddd9a95a30926",
+        "timestamp": "2026-08-13T21:57:27Z"
+      },
+      {
         "version": "1.0.0.11",
         "changelog": "## What's Changed\n\n- Fix the seven problems the code review turned up (e5cd86d)\n- Update manifest.json for version 1.0.0.10 (01ae7f9)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.10...1.0.0.11\n",
         "targetAbi": "10.11.11.0",
