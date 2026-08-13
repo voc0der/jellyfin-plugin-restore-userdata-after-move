@@ -48,10 +48,17 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
     /// Collects the current catalog.
     /// </summary>
     /// <param name="configuredLibraryIds">The libraries an operator marked eligible.</param>
+    /// <param name="checkPathExists">
+    /// Whether the media file behind each item must be stat-ed. When false the
+    /// filesystem is not touched at all: this runs once per movie and episode on
+    /// the server, and on a network mount it is the slowest thing in the pass, so
+    /// paying for an answer nothing will read is pure waste.
+    /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>One snapshot per current movie and episode.</returns>
     public IReadOnlyList<CurrentItemSnapshot> Collect(
         IReadOnlyList<Guid> configuredLibraryIds,
+        bool checkPathExists,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(configuredLibraryIds);
@@ -71,7 +78,7 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
         foreach (var item in items)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            snapshots.Add(ToSnapshot(item, membership, seriesProviderIds));
+            snapshots.Add(ToSnapshot(item, membership, seriesProviderIds, checkPathExists));
         }
 
         return snapshots;
@@ -90,7 +97,8 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
     private CurrentItemSnapshot ToSnapshot(
         BaseItem item,
         IReadOnlyDictionary<Guid, List<Guid>> membership,
-        IReadOnlyDictionary<Guid, Dictionary<string, string>> seriesProviderIds)
+        IReadOnlyDictionary<Guid, Dictionary<string, string>> seriesProviderIds,
+        bool checkPathExists)
     {
         var episode = item as Episode;
         var seriesId = episode?.SeriesId;
@@ -107,7 +115,10 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
             Kind = ClassifyKind(item),
             Name = item.Name,
             Path = item.Path,
-            PathExists = item.IsFileProtocol && PathExists(item.Path),
+            // Not stat-ed at all when the check is off: an item is then treated as
+            // present, which is what "do not require the path to exist" means, and
+            // ItemEligibility will not look at this field either way.
+            PathExists = !checkPathExists || (item.IsFileProtocol && PathExists(item.Path)),
             IsVirtualItem = item.IsVirtualItem,
             IsExtraOrTrailer = item.ExtraType.HasValue,
             LibraryIds = membership.TryGetValue(item.Id, out var libraries) ? libraries : [],

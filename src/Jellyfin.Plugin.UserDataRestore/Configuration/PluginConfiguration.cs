@@ -8,8 +8,9 @@ namespace Jellyfin.Plugin.UserDataRestore.Configuration;
 /// <remarks>
 /// Every setting here has a default that is right for almost everybody, which is
 /// why the configuration page is nearly empty. There is nothing to arm and
-/// nothing to acknowledge: running the apply task is itself the deliberate act,
-/// and the guard that matters is the preflight, not a checkbox.
+/// nothing to acknowledge: running the task is itself the deliberate act, and the
+/// guard that matters is the check made immediately before each individual write,
+/// not a checkbox.
 /// </remarks>
 public class PluginConfiguration : BasePluginConfiguration
 {

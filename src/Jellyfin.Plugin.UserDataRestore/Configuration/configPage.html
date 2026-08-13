@@ -32,12 +32,16 @@
                 <button is="emby-button" type="button" id="runNow" class="raised block">
                     <span>Run now</span>
                 </button>
-                <div class="fieldDescription" id="runStatus" style="margin-top:0.6em;">
+                <!-- Standing guidance and run status are deliberately separate
+                     elements. They used to share one, so pressing Run now wiped the
+                     only place in the UI that says this task has no schedule. -->
+                <div class="fieldDescription" style="margin-top:0.6em;">
                     This task has no schedule of its own. To run it regularly, add a trigger under
                     Dashboard &rarr; Scheduled Tasks &rarr; Restore user data after move, timed to land
                     after whatever moves your files and the library scan that follows it. Results
                     appear on that same page.
                 </div>
+                <div class="fieldDescription" id="runStatus" style="margin-top:0.6em;"></div>
             </div>
 
         </div>
@@ -86,6 +90,9 @@
                 });
             }
 
+            // Every one of these has a rejection handler because Dashboard's
+            // loading overlay is modal: a promise that only handles success leaves
+            // the page spinning forever with nothing on screen saying why.
             function load() {
                 Dashboard.showLoadingMsg();
 
@@ -95,7 +102,17 @@
                 ]).then(function (results) {
                     renderLibraries(results[1] || [], results[0].EligibleLibraryIds || []);
                     Dashboard.hideLoadingMsg();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    page.querySelector('#libraryList').innerHTML =
+                        '<div class="fieldDescription">Could not load libraries. Reload the page to try again.</div>';
                 });
+            }
+
+            function failedToSave() {
+                Dashboard.hideLoadingMsg();
+                page.querySelector('#runStatus').textContent =
+                    'Could not save the settings. Nothing was changed.';
             }
 
             function save(event) {
@@ -109,8 +126,8 @@
 
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
-                    });
-                });
+                    }, failedToSave);
+                }, failedToSave);
 
                 return false;
             }

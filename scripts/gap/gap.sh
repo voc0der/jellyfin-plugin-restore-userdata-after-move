@@ -1124,7 +1124,28 @@ run_line() {
     verify_scan_guard
 
     local complaints
-    complaints=$(tail -n "+$((log_mark + 1))" "$SERVER_LOG" | grep -cE '\[(ERR|FTL)\]' || true)
+    # One known exception is excluded, and only this one: Jellyfin's own startup
+    # splash server answers requests while the real host boots, and a readiness
+    # probe landing before startup finishes makes it throw out of
+    # ApplicationHost.GetSmartApiUrl. It is Jellyfin racing this harness's polling,
+    # nothing the plugin touched, and which restart it lands on is luck -- so
+    # counting it makes this assertion flap rather than mean anything.
+    #
+    # Matched on the stack frame, not the message: the same race surfaces as
+    # ResourceNotFoundException or NullReferenceException depending on how far
+    # startup got, and a filter written against one of those texts silently stops
+    # working when it comes up as the other. A whole log block is examined, since
+    # the frame is several lines below the [ERR] that opens it.
+    complaints=$(tail -n "+$((log_mark + 1))" "$SERVER_LOG" | awk '
+        function flush() { if (iserr && block !~ /GetSmartApiUrl/) count++ }
+        /^\[[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\]/ {
+            flush()
+            iserr = ($0 ~ /\[(ERR|FTL)\]/)
+            block = $0
+            next
+        }
+        { block = block "\n" $0 }
+        END { flush(); print count + 0 }')
     require "the server logged nothing at error level during the run" 0 "$complaints"
 
     stop_server

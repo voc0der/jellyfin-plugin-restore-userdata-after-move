@@ -175,7 +175,7 @@ public class RestoreUserDataTask : IScheduledTask
             throw new InvalidOperationException(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{applied.Failed} of {result.Writes.Count} restores did not verify. The stranded rows are untouched; the next run will retry them."));
+                    $"{applied.Failed} of {result.Writes.Count} restores did not complete: they threw, or the state did not read back. The stranded rows are untouched; the next run will retry them. The plan for this run was still written."));
         }
     }
 
@@ -214,7 +214,8 @@ public class RestoreUserDataTask : IScheduledTask
         CancellationToken cancellationToken)
     {
         var detachedRows = await reader.ReadDetachedAsync(cancellationToken).ConfigureAwait(false);
-        var currentItems = new LibraryItemCollector(_libraryManager).Collect(options.EligibleLibraryIds, cancellationToken);
+        var currentItems = new LibraryItemCollector(_libraryManager)
+            .Collect(options.EligibleLibraryIds, options.RequirePathExists, cancellationToken);
 
         var candidates = DetachedUserDataAnalyzer.BuildCandidates(new AnalysisInput
         {
@@ -251,7 +252,31 @@ public class RestoreUserDataTask : IScheduledTask
         return counts;
     }
 
+    /// <remarks>
+    /// Nothing in here is allowed to escape except cancellation. A write that
+    /// throws must not take the rest of the batch with it, and — more importantly
+    /// — must not skip the plan: the plan is written after this pass, so an
+    /// exception escaping here would leave user state changed with no record of
+    /// what changed it. A failure is counted, logged, and the run carries on.
+    /// </remarks>
     private AppliedCounts Apply(UserDataWriter writer, PlannedWrite write, AppliedCounts counts)
+    {
+        try
+        {
+            return ApplyCore(writer, write, counts);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(
+                ex,
+                "Restoring user {UserId} item {ItemId} threw. The stranded row is untouched, so the next run retries it.",
+                write.UserId,
+                write.ItemId);
+            return counts with { Failed = counts.Failed + 1 };
+        }
+    }
+
+    private AppliedCounts ApplyCore(UserDataWriter writer, PlannedWrite write, AppliedCounts counts)
     {
         var user = _userManager.GetUserById(write.UserId);
         var item = _libraryManager.GetItemById(write.ItemId);
@@ -268,6 +293,16 @@ public class RestoreUserDataTask : IScheduledTask
         // The analysis established this target had no state, but that was a few
         // seconds ago and somebody may have started watching in between. This is
         // the last moment it can be checked, and it is cheap, so check it.
+        //
+        // Narrower than the analysis on purpose, because it has to be: the manager
+        // reports state, not row existence, so it cannot tell "no row" from "a row
+        // holding defaults". The analysis can, and refuses to plan a write when any
+        // row exists — which is what makes a clear survive a later run. The gap is
+        // a clear performed between that analysis and this write, inside one run,
+        // which this check reads as untouched and overwrites. Seconds wide, and the
+        // next run classifies it current_state_conflict and leaves it alone.
+        // Closing it fully means a per-write database round trip on the apply path;
+        // not worth it for a window this size.
         if (!writer.Read(user, item).IsDefault)
         {
             _logger.LogInformation(

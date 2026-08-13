@@ -27,17 +27,18 @@ public sealed class UserDataWriter(IUserDataManager userDataManager)
     /// Builds the DTO for a restore.
     /// </summary>
     /// <param name="state">The state to restore.</param>
-    /// <param name="item">The item being restored onto.</param>
     /// <returns>The DTO to hand to the manager.</returns>
     /// <remarks>
-    /// The key is required and comes from the item itself, never from the
-    /// stranded row: the row's key is how the snapshot was found, not where it
-    /// belongs now. Jellyfin fans a save out across the item's own keys.
+    /// Carries the six recoverable fields and nothing else — no key. Which keys a
+    /// save lands on is the manager's business, decided from the item handed to
+    /// <see cref="IUserDataManager.SaveUserData"/>, and it fans the save out across
+    /// every key that item reports. That is the reason the stranded row's own key
+    /// is never passed along: it is how the snapshot was found, not where it
+    /// belongs now.
     /// </remarks>
-    public static UpdateUserItemDataDto ToDto(RecoveryState state, BaseItem item)
+    public static UpdateUserItemDataDto ToDto(RecoveryState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        ArgumentNullException.ThrowIfNull(item);
 
         return new UpdateUserItemDataDto
         {
@@ -67,7 +68,7 @@ public sealed class UserDataWriter(IUserDataManager userDataManager)
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(state);
 
-        _userDataManager.SaveUserData(user, item, ToDto(state, item), UserDataSaveReason.UpdateUserData);
+        _userDataManager.SaveUserData(user, item, ToDto(state), UserDataSaveReason.UpdateUserData);
     }
 
     /// <summary>
