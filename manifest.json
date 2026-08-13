@@ -9,6 +9,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.0.8",
+        "changelog": "## What's Changed\n\n- Prove the identification lag the nightly schedule exists for (a09b0bc)\n- Collapse the two tasks into one nightly restore task (3a0a3e8)\n- Update manifest.json for version 1.0.0.7 (a9ac918)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.7...1.0.0.8\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.8/RestoreUserDataAfterMove_1.0.0.8_jellyfin-10.11.11.zip",
+        "checksum": "1452858a4c38a01f40d06e5e10367bad",
+        "timestamp": "2026-08-13T19:11:40Z"
+      },
+      {
         "version": "1.0.0.7",
         "changelog": "## What's Changed\n\n- fix(gap): stop the harness from killing the server it tests (7403b05)\n- docs: stop describing the plugin as analysis-only (5901e7d)\n- test(gap): prove the apply path against real Jellyfin servers (c4e7407)\n- refactor(apply): drop the arm, the API, and the confirmation ceremony (685534d)\n- feat(apply): add arming, whole-plan preflight, and the apply task (8f57a42)\n- feat(apply): add the IUserDataManager write adapter (96e18e6)\n- docs(evidence): record the first real-installation analysis run (78e8af0)\n- Update manifest.json for version 1.0.0.6 (4440c20)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.6...1.0.0.7\n",
         "targetAbi": "10.11.11.0",
