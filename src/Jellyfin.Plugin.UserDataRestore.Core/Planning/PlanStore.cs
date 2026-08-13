@@ -15,9 +15,8 @@ public readonly record struct StoredPlan(string Path, string FileName, string Sh
 /// <remarks>
 /// Plans are audit artifacts, not a standing identity database. They are written
 /// to a temporary file and renamed into place so a reader never sees a partial
-/// plan, and pruning never removes a protected (armed) plan — a rule this build
-/// cannot exercise, since it has nothing to arm, but which belongs with the code
-/// that deletes files rather than with the code that will later arm them.
+/// plan, and pruning can be told to spare a named plan — which belongs with the
+/// code that deletes files, whether or not a caller currently uses it.
 /// </remarks>
 public sealed class PlanStore(string directory)
 {

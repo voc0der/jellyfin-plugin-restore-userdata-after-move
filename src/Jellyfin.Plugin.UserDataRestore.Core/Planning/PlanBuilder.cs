@@ -67,9 +67,9 @@ public static class PlanBuilder
             ConfiguredLibraryIds = ToSet(context.Options.EligibleLibraryIds.Select(Format)),
             FinalPathPrefixes = ToSet(context.Options.FinalPathPrefixes),
 
-            // Milestone 1 ships no apply task at all. The flag is in the artifact
-            // so a plan can never be mistaken for one a future build armed.
-            ApplySupported = false,
+            // Recorded in the artifact so a plan written by an analysis-only build
+            // can never be mistaken for one this build produced.
+            ApplySupported = true,
             Summary = BuildSummary(result),
             ReadOnlyProof = new PlanReadOnlyProof
             {

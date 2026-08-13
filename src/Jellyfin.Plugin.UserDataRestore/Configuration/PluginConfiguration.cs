@@ -6,9 +6,10 @@ namespace Jellyfin.Plugin.UserDataRestore.Configuration;
 /// Persistent plugin configuration (DESIGN §6.1).
 /// </summary>
 /// <remarks>
-/// The apply-side settings (arming, backup acknowledgement, write caps) are
-/// absent because this build has no apply task. They arrive with Milestone 3,
-/// together with the code that enforces them.
+/// Every setting here has a default that is right for almost everybody, which is
+/// why the configuration page is nearly empty. There is nothing to arm and
+/// nothing to acknowledge: running the apply task is itself the deliberate act,
+/// and the guard that matters is the preflight, not a checkbox.
 /// </remarks>
 public class PluginConfiguration : BasePluginConfiguration
 {

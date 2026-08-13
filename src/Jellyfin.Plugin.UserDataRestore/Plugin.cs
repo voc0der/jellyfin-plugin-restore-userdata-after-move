@@ -38,7 +38,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     /// <inheritdoc />
     public override string Description =>
-        "Finds user data Jellyfin stranded when a media path changed, and reports which current item each stranded snapshot belongs to.";
+        "Finds user data Jellyfin stranded when a media path changed, and puts it back on the item it belongs to now.";
 
     /// <summary>
     /// Gets the directory plans are written to.
