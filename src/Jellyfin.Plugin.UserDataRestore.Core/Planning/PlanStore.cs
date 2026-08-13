@@ -15,9 +15,8 @@ public readonly record struct StoredPlan(string Path, string FileName, string Sh
 /// <remarks>
 /// Plans are audit artifacts, not a standing identity database. They are written
 /// to a temporary file and renamed into place so a reader never sees a partial
-/// plan, and pruning never removes a protected (armed) plan — a rule this build
-/// cannot exercise, since it has nothing to arm, but which belongs with the code
-/// that deletes files rather than with the code that will later arm them.
+/// plan, and pruning can be told to spare a named plan — which belongs with the
+/// code that deletes files, whether or not a caller currently uses it.
 /// </remarks>
 public sealed class PlanStore(string directory)
 {
@@ -80,6 +79,44 @@ public sealed class PlanStore(string directory)
             // File names start with a sortable UTC timestamp, so ordinal order is
             // chronological order without touching filesystem metadata.
             .OrderByDescending(stored => stored.FileName, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// Reads a stored plan back by its ID.
+    /// </summary>
+    /// <param name="planId">The full plan ID.</param>
+    /// <returns>The plan, or <see langword="null"/> if no stored file carries it.</returns>
+    /// <remarks>
+    /// Matched on the ID inside the file, not on the file name. The name carries a
+    /// short prefix for humans; what authorizes an apply is the full ID.
+    /// </remarks>
+    public PlanDocument? Read(string planId)
+    {
+        if (string.IsNullOrEmpty(planId))
+        {
+            return null;
+        }
+
+        foreach (var stored in List())
+        {
+            PlanDocument plan;
+
+            try
+            {
+                plan = PlanCanonicalizer.FromJson(File.ReadAllText(stored.Path));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                continue;
+            }
+
+            if (string.Equals(plan.PlanId, planId, StringComparison.Ordinal))
+            {
+                return plan;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

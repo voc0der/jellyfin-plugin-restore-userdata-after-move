@@ -36,7 +36,7 @@ public static class AnalysisSummary
 
         text.Append(ready == 0
             ? "No writes available: nothing was uniquely and safely recoverable."
-            : string.Create(CultureInfo.InvariantCulture, $"{ready} recoverable snapshots found. This build cannot apply them."));
+            : string.Create(CultureInfo.InvariantCulture, $"{ready} recoverable snapshots found. Run 'Apply detached user-data recovery' to restore them."));
         text.Append('\n');
 
         text.Append("Candidates: ");

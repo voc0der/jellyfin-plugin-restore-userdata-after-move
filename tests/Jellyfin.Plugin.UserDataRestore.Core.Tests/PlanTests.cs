@@ -177,11 +177,13 @@ public class PlanTests
     }
 
     [Fact]
-    public void ThisBuildNeverMarksAPlanApplyable()
+    public void APlanRecordsThatTheBuildThatWroteItCanApply()
     {
+        // Analysis-only builds wrote plans too. The flag is how a reader tells
+        // one of those from a plan this build produced.
         var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")]);
 
-        Assert.False(plan.ApplySupported);
+        Assert.True(plan.ApplySupported);
     }
 
     [Fact]

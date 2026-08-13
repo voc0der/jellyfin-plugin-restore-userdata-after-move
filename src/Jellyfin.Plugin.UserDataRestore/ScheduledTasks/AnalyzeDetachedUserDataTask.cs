@@ -20,11 +20,10 @@ namespace Jellyfin.Plugin.UserDataRestore.ScheduledTasks;
 /// <remarks>
 /// <para>Read-only, and demonstrably so: the task fingerprints the entire
 /// <c>UserData</c> table before and after the run and records both in the plan.
-/// It has no default trigger, and this build ships no apply task, so nothing here
-/// can change Jellyfin state.</para>
-/// <para>Its purpose is to answer one question — are uniquely matchable,
-/// state-bearing stranded rows common enough to justify building a write path at
-/// all? A high ambiguity or no-match rate is a legitimate answer.</para>
+/// Nothing in this file writes.</para>
+/// <para>It produces the plan the apply task consumes. The apply task re-runs
+/// this same analysis before it writes anything, so a stale plan cannot be acted
+/// on — which is what makes it safe for this half to have no guard at all.</para>
 /// </remarks>
 public class AnalyzeDetachedUserDataTask : IScheduledTask
 {
@@ -75,9 +74,9 @@ public class AnalyzeDetachedUserDataTask : IScheduledTask
 
     /// <inheritdoc />
     /// <remarks>
-    /// No triggers, ever. An administrator can still add one, which is exactly why
-    /// the apply half of this design is a separate task that refuses to run
-    /// without a one-time arm (DESIGN §1).
+    /// No triggers. An administrator can still add one, and that is harmless here:
+    /// this task only reads and writes a plan file. The apply half is a separate
+    /// task precisely so that scheduling this one cannot schedule that one.
     /// </remarks>
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 

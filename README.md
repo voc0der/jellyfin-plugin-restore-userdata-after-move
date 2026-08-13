@@ -17,14 +17,9 @@ owned them, and stamps a retention date. The cleanup task that would eventually
 purge them has no default schedule, so on a stock server they sit there
 indefinitely — unreachable rather than gone.
 
-This plugin finds those stranded rows and works out which item each one belongs to
-now. Putting the state back — through Jellyfin's own APIs, never by editing the
-database — is the second half, and it is not built yet.
-
-> **Status: analysis only.** This build finds and reports. It contains no code
-> that can write user data — the restore half is not built, and will only be
-> built if the analysis says there is enough to recover to justify it. See
-> [PLAN.md](PLAN.md).
+This plugin finds those stranded rows, works out which item each one belongs to
+now, and puts the state back — through Jellyfin's own user-data manager, never by
+editing the database.
 
 ## What it recovers
 
@@ -55,14 +50,21 @@ years ago.
 
 ## How it works
 
-One manual task with no schedule: **Analyze detached user data**. It reports what
-could be recovered and gives a reason for everything it cannot, then writes a plan
-file you can read. Nothing consumes that plan — the apply task described in
-[DESIGN.md](DESIGN.md) does not exist in this build.
+Two tasks, neither of them scheduled. Nothing happens unless you run them.
 
-The task proves it changed nothing rather than asking you to take its word: it
-fingerprints every row of the `UserData` table before and after the run and
-records both in the plan.
+1. **Analyze detached user data** — finds what can be recovered, gives a reason
+   for everything it cannot, and writes a plan file you can read. It proves it
+   changed nothing rather than asking you to take its word: it fingerprints every
+   row of the `UserData` table before and after the run and records both in the
+   plan.
+2. **Apply detached user-data recovery** — restores it. Running this task *is*
+   the confirmation; there is no arming step, no phrase to type, no checkbox.
+
+Apply does not trust the plan. It re-runs the entire analysis first and compares:
+if a single stranded row changed, a target gained state, or a match became
+ambiguous, the whole run refuses and writes nothing. Each write is an absolute
+value through `IUserDataManager`, read back and verified before the next one goes
+out.
 
 Install it, run it, remove it. It is not meant to live on your server.
 
@@ -96,7 +98,10 @@ Open the plugin's settings and click **Run analysis**. There is nothing to
 configure: it uses every movie and TV library, scoped to those libraries' own
 folders as the server reports them.
 
-Results appear in the task's summary and the server log; the full detail is in a
+Read the result, and if it looks right, run **Apply detached user-data recovery**
+from Dashboard → Scheduled Tasks.
+
+Results appear in each task's summary and the server log; the full detail is in a
 plan file under `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
 
 Under **Advanced** you can restrict it to particular libraries or folders. The
@@ -109,8 +114,8 @@ which honestly reports as ambiguous — the right answer to an unanswerable
 question, but not a useful one.
 
 If you are willing to share the `summary` block of your plan — counts only, no
-titles or user IDs — it is exactly the evidence the go/no-go review in
-[PLAN.md](PLAN.md) needs.
+titles or user IDs — it is useful evidence for how this behaves on libraries
+other than the handful it has been measured on.
 
 ## Requirements
 
@@ -133,11 +138,13 @@ still has every column it reads, and refuses if not.
 
 - [DESIGN.md](DESIGN.md) — full specification, safety invariants, and the
   empirical results behind them.
-- [PLAN.md](PLAN.md) — what is built, what is not, and what must be true before
-  writes are implemented.
+- [PLAN.md](PLAN.md) — what is built and what is not.
 - [evidence/](evidence/) — the Gate 0 probe, server logs, and row dumps;
   [evidence/alpha/](evidence/alpha/) holds the analyzer's validation runs and
   published plans.
+- [scripts/gap/](scripts/gap/) — the end-to-end harness that stands up a
+  disposable server, strands user data for real, and proves the apply path puts
+  it back.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — building, linting, and what not to change
   without evidence.
 

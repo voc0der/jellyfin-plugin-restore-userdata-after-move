@@ -7,8 +7,10 @@ namespace Jellyfin.Plugin.UserDataRestore.Core.Planning;
 /// run produces.
 /// </summary>
 /// <remarks>
-/// Milestone 1 writes this and stops. Nothing consumes it, nothing arms it, and
-/// no task in this build can act on it.
+/// The analysis writes it and the apply task reads it, but the plan is not
+/// authority to write: apply re-runs the whole analysis and reconciles against
+/// this document, so what the plan really carries is a record of what was true
+/// when it was made.
 /// </remarks>
 public sealed record PlanDocument
 {
