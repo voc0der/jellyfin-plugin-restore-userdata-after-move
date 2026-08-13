@@ -148,6 +148,35 @@ public sealed class UserDataReader(IDbContextFactory<JellyfinDbContext> dbFactor
     }
 
     /// <summary>
+    /// Whether any <c>UserData</c> row exists for one pair, right now.
+    /// </summary>
+    /// <param name="userId">The user.</param>
+    /// <param name="itemId">The item.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true"/> when the pair already has at least one row.</returns>
+    /// <remarks>
+    /// <para>Existence, not state, and that distinction is the whole reason this
+    /// exists. <c>IUserDataManager</c> reports a pair with no row and a pair whose
+    /// row holds nothing but defaults identically — so an unwatch or an unfavorite,
+    /// which writes a real row full of default values, is indistinguishable through
+    /// the manager from a pair nobody has ever touched.</para>
+    /// <para>The analysis already refuses to plan a write when any row exists. This
+    /// asks the same question again immediately before the write, closing the gap
+    /// where a user clears something in the seconds between the two and the run
+    /// puts the old state back over the top of it. One indexed lookup per planned
+    /// write, and there are rarely many.</para>
+    /// </remarks>
+    public async Task<bool> RowExistsAsync(Guid userId, Guid itemId, CancellationToken cancellationToken)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        return await db.UserData
+            .AsNoTracking()
+            .AnyAsync(row => row.UserId == userId && row.ItemId == itemId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Reads live rows for candidate pairs, in batches (DESIGN §7.5).
     /// </summary>
     /// <param name="pairs">The <c>(user, item)</c> pairs to inspect.</param>

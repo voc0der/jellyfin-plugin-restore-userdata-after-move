@@ -87,7 +87,16 @@ Running it repeatedly is safe by construction, not by promise:
   and is never written again.
 - If you then change it yourself — mark something unwatched, un-favourite it —
   the pair reads as `current_state_conflict` and is never written again either.
-  **A scheduled run cannot undo what you just did.**
+  **A scheduled run cannot undo what you just did.** That holds even if you do it
+  while a run is in progress: every write re-checks, against the database and in
+  the instant before it lands, that the item still has no user-data row of any
+  kind. Clearing something writes a real row full of default values, so a clear
+  is an act the run can see, not an absence it can mistake for untouched.
+- Every write also re-checks that the target is still the item the evidence
+  pointed at — still in a selected library, still beneath its folders, still
+  holding its media file, and still reporting the IDs the stranded row matched
+  on. A metadata refresh landing mid-run re-identifies items, and an item that
+  now answers to different IDs is skipped rather than written to.
 - The stranded rows are never modified or deleted, so a failed run leaves the
   only remaining copy of your history intact and the next run retries it.
 

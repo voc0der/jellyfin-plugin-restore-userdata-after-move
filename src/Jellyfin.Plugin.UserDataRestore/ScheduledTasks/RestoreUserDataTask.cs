@@ -160,7 +160,7 @@ public class RestoreUserDataTask : IScheduledTask
         var result = await AnalyzeAsync(options, reader, cancellationToken).ConfigureAwait(false);
         progress.Report(50);
 
-        var applied = Apply(result.Writes, progress, cancellationToken);
+        var applied = await ApplyAsync(result.Writes, options, reader, progress, cancellationToken).ConfigureAwait(false);
         progress.Report(95);
 
         var fingerprintAfter = await reader.FingerprintAsync(cancellationToken).ConfigureAwait(false);
@@ -242,8 +242,10 @@ public class RestoreUserDataTask : IScheduledTask
         return DetachedUserDataAnalyzer.Complete(candidates, currentRows);
     }
 
-    private AppliedCounts Apply(
+    private async Task<AppliedCounts> ApplyAsync(
         IReadOnlyList<PlannedWrite> writes,
+        AnalysisOptions options,
+        UserDataReader reader,
         IProgress<double> progress,
         CancellationToken cancellationToken)
     {
@@ -253,12 +255,37 @@ public class RestoreUserDataTask : IScheduledTask
         }
 
         var writer = new UserDataWriter(_userDataManager);
+
+        // Read now rather than reused from the analysis pass. This map is what each
+        // target's library membership is re-checked against, and checking a target
+        // against the same stale answer that admitted it checks nothing.
+        var membership = new LibraryItemCollector(_libraryManager)
+            .BuildMembership(options.EligibleLibraryIds, cancellationToken);
+
         var counts = default(AppliedCounts);
 
         for (var index = 0; index < writes.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            counts = Apply(writer, writes[index], counts);
+
+            // The entry check said no scan was running; one can still start here.
+            // A scan invalidates every remaining target at once — items are being
+            // removed and recreated — so this abandons the rest of the batch rather
+            // than revalidating into a moving library. Nothing is lost: the stranded
+            // rows are untouched and the next run plans them again.
+            if (LibraryScanIsRunning())
+            {
+                var abandoned = writes.Count - index;
+                _logger.LogWarning(
+                    "A library scan started part-way through this run. Abandoning the remaining {Count} restores; "
+                    + "the stranded rows are untouched, so the next run picks them up.",
+                    abandoned);
+                counts = counts with { Skipped = counts.Skipped + abandoned };
+                break;
+            }
+
+            counts = await ApplyAsync(writer, reader, writes[index], options, membership, counts, cancellationToken)
+                .ConfigureAwait(false);
             progress.Report(50 + (45.0 * (index + 1) / writes.Count));
         }
 
@@ -272,11 +299,19 @@ public class RestoreUserDataTask : IScheduledTask
     /// exception escaping here would leave user state changed with no record of
     /// what changed it. A failure is counted, logged, and the run carries on.
     /// </remarks>
-    private AppliedCounts Apply(UserDataWriter writer, PlannedWrite write, AppliedCounts counts)
+    private async Task<AppliedCounts> ApplyAsync(
+        UserDataWriter writer,
+        UserDataReader reader,
+        PlannedWrite write,
+        AnalysisOptions options,
+        IReadOnlyDictionary<Guid, List<Guid>> membership,
+        AppliedCounts counts,
+        CancellationToken cancellationToken)
     {
         try
         {
-            return ApplyCore(writer, write, counts);
+            return await ApplyCoreAsync(writer, reader, write, options, membership, counts, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -289,7 +324,14 @@ public class RestoreUserDataTask : IScheduledTask
         }
     }
 
-    private AppliedCounts ApplyCore(UserDataWriter writer, PlannedWrite write, AppliedCounts counts)
+    private async Task<AppliedCounts> ApplyCoreAsync(
+        UserDataWriter writer,
+        UserDataReader reader,
+        PlannedWrite write,
+        AnalysisOptions options,
+        IReadOnlyDictionary<Guid, List<Guid>> membership,
+        AppliedCounts counts,
+        CancellationToken cancellationToken)
     {
         var user = _userManager.GetUserById(write.UserId);
         var item = _libraryManager.GetItemById(write.ItemId);
@@ -303,19 +345,42 @@ public class RestoreUserDataTask : IScheduledTask
             return counts with { Skipped = counts.Skipped + 1 };
         }
 
-        // The analysis established this target had no state, but that was a few
-        // seconds ago and somebody may have started watching in between. This is
-        // the last moment it can be checked, and it is cheap, so check it.
-        //
-        // Narrower than the analysis on purpose, because it has to be: the manager
-        // reports state, not row existence, so it cannot tell "no row" from "a row
-        // holding defaults". The analysis can, and refuses to plan a write when any
-        // row exists — which is what makes a clear survive a later run. The gap is
-        // a clear performed between that analysis and this write, inside one run,
-        // which this check reads as untouched and overwrites. Seconds wide, and the
-        // next run classifies it current_state_conflict and leaves it alone.
-        // Closing it fully means a per-write database round trip on the apply path;
-        // not worth it for a window this size.
+        // Everything that admitted this target, asked again of the item as it is
+        // now. The analysis ran seconds ago, but a metadata refresh can rewrite an
+        // item's provider IDs in that time — and the keys those IDs produce are the
+        // entire identity argument for writing here. An item that has stopped
+        // answering to them is not the item the evidence was about.
+        var snapshot = LibraryItemCollector.Snapshot(item, membership, options.RequirePathExists);
+        if (TargetRevalidation.Evaluate(snapshot, options, write.SourceKeys) is { } disqualification)
+        {
+            _logger.LogWarning(
+                "Item {ItemId} no longer qualifies as the target for user {UserId} ({Reason}); skipping. "
+                + "The stranded row is untouched, so the next run reconsiders it.",
+                write.ItemId,
+                write.UserId,
+                disqualification);
+            return counts with { Skipped = counts.Skipped + 1 };
+        }
+
+        // Row existence, straight from the database, because the manager cannot
+        // answer it: it reports a pair with no row and a pair whose row holds
+        // nothing but defaults identically. An unwatch or an unfavourite performed
+        // since the analysis writes exactly such a row, and reading it as
+        // "untouched" is how a scheduled run would undo a deliberate act. The
+        // analysis asks this same question; asking it again here is what shrinks the
+        // window to nothing that matters.
+        if (await reader.RowExistsAsync(write.UserId, write.ItemId, cancellationToken).ConfigureAwait(false))
+        {
+            _logger.LogInformation(
+                "User {UserId} gained a user-data row for item {ItemId} since the analysis; leaving it alone. "
+                + "A row holding default values is an explicit clear, not an absence.",
+                write.UserId,
+                write.ItemId);
+            return counts with { Skipped = counts.Skipped + 1 };
+        }
+
+        // Cheap second opinion through the manager, which sees state the database
+        // read above cannot contradict but may have cached differently.
         if (!writer.Read(user, item).IsDefault)
         {
             _logger.LogInformation(

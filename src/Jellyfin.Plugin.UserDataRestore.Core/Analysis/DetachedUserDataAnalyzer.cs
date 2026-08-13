@@ -233,6 +233,10 @@ public static class DetachedUserDataAnalyzer
                     State = state,
                     EvidenceRule = group.EvidenceRule,
                     SourceFingerprints = [.. group.Keys.Select(k => k.Row.Fingerprint).Order(StringComparer.Ordinal)],
+                    SourceKeys = [.. group.Keys
+                        .Select(k => k.Row.CustomDataKey!)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)],
                 });
             }
         }

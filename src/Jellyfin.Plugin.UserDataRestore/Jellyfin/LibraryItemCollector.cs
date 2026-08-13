@@ -63,7 +63,7 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
     {
         ArgumentNullException.ThrowIfNull(configuredLibraryIds);
 
-        var membership = BuildLibraryMembership(configuredLibraryIds, cancellationToken);
+        var membership = BuildMembership(configuredLibraryIds, cancellationToken);
         var seriesProviderIds = BuildSeriesProviderIds(cancellationToken);
 
         var items = _libraryManager.GetItemList(new InternalItemsQuery
@@ -84,6 +84,72 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
         return snapshots;
     }
 
+    /// <summary>
+    /// Snapshots one item the caller already holds.
+    /// </summary>
+    /// <param name="item">The item, freshly read from the library manager.</param>
+    /// <param name="membership">Library membership, from <see cref="BuildMembership"/>.</param>
+    /// <param name="checkPathExists">Whether to stat the media file.</param>
+    /// <returns>The snapshot.</returns>
+    /// <remarks>
+    /// For revalidating a single recovery target immediately before writing to it,
+    /// where re-collecting the whole catalogue would cost more than the run. The
+    /// owning series' provider IDs are left empty: they only classify a key's
+    /// identity evidence, which was settled during analysis, and nothing that
+    /// reads this snapshot looks at them.
+    /// </remarks>
+    public static CurrentItemSnapshot Snapshot(
+        BaseItem item,
+        IReadOnlyDictionary<Guid, List<Guid>> membership,
+        bool checkPathExists)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(membership);
+
+        return ToSnapshot(item, membership, new Dictionary<Guid, Dictionary<string, string>>(), checkPathExists);
+    }
+
+    /// <summary>
+    /// Maps each item in the configured libraries to the libraries holding it.
+    /// </summary>
+    /// <param name="configuredLibraryIds">The libraries an operator marked eligible.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Item ID to the library IDs containing it.</returns>
+    public Dictionary<Guid, List<Guid>> BuildMembership(
+        IReadOnlyList<Guid> configuredLibraryIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(configuredLibraryIds);
+
+        var membership = new Dictionary<Guid, List<Guid>>();
+
+        foreach (var libraryId in configuredLibraryIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var ids = _libraryManager.GetItemIds(new InternalItemsQuery
+            {
+                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
+                Recursive = true,
+                AncestorIds = [libraryId],
+                DtoOptions = ItemFieldsNeeded,
+            });
+
+            foreach (var id in ids)
+            {
+                if (!membership.TryGetValue(id, out var libraries))
+                {
+                    libraries = [];
+                    membership[id] = libraries;
+                }
+
+                libraries.Add(libraryId);
+            }
+        }
+
+        return membership;
+    }
+
     private static ItemKind ClassifyKind(BaseItem item) => item switch
     {
         Episode => ItemKind.Episode,
@@ -94,7 +160,7 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
     private static bool PathExists(string? path) =>
         !string.IsNullOrEmpty(path) && (File.Exists(path) || Directory.Exists(path));
 
-    private CurrentItemSnapshot ToSnapshot(
+    private static CurrentItemSnapshot ToSnapshot(
         BaseItem item,
         IReadOnlyDictionary<Guid, List<Guid>> membership,
         IReadOnlyDictionary<Guid, Dictionary<string, string>> seriesProviderIds,
@@ -129,39 +195,6 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
             SeasonNumber = episode?.ParentIndexNumber,
             EpisodeNumber = episode?.IndexNumber,
         };
-    }
-
-    private Dictionary<Guid, List<Guid>> BuildLibraryMembership(
-        IReadOnlyList<Guid> configuredLibraryIds,
-        CancellationToken cancellationToken)
-    {
-        var membership = new Dictionary<Guid, List<Guid>>();
-
-        foreach (var libraryId in configuredLibraryIds)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var ids = _libraryManager.GetItemIds(new InternalItemsQuery
-            {
-                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
-                Recursive = true,
-                AncestorIds = [libraryId],
-                DtoOptions = ItemFieldsNeeded,
-            });
-
-            foreach (var id in ids)
-            {
-                if (!membership.TryGetValue(id, out var libraries))
-                {
-                    libraries = [];
-                    membership[id] = libraries;
-                }
-
-                libraries.Add(libraryId);
-            }
-        }
-
-        return membership;
     }
 
     private Dictionary<Guid, Dictionary<string, string>> BuildSeriesProviderIds(CancellationToken cancellationToken)

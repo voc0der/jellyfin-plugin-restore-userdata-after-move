@@ -630,7 +630,26 @@ and never delete the currently armed plan.
 
 ## 9. Apply pipeline
 
-### 9.1 Whole-plan preflight
+### 9.1 Whole-plan preflight — SUPERSEDED
+
+> There is no whole-plan preflight, because there is no plan to fly ahead of.
+> One task analyses and writes in the same pass (§1), so checks 1 and 10 no
+> longer exist, and checks 4–9 have nothing to re-read: the analysis that
+> produced the write happened seconds ago in the same process.
+>
+> What survives is per-write, listed in §9.2: every condition that admitted a
+> target is asked again of the live item immediately before writing to it.  That
+> is strictly later than a preflight pass would have asked — a preflight
+> validates the whole batch and then writes it over the following minutes, so its
+> last checks are the stalest.  Check 3 survives too, both at entry and before
+> each write, and a scan starting mid-run abandons the rest of the batch.
+>
+> The one thing the preflight could do that per-write revalidation cannot is
+> re-establish the *uniqueness* of every reverse mapping, which is a property of
+> the whole catalogue rather than of one item.  Nothing changes it in bulk except
+> a scan or a refresh, which is what check 3 now covers.
+>
+> The rest of this section records what was designed.
 
 Before any recovery write:
 
@@ -656,15 +675,28 @@ hundreds of writes have already occurred.
 For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
 
 1. Resolve the user and current item again.
-2. Check cancellation.
-3. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
-4. Call `IUserDataManager.SaveUserData(user, item, dto,
+2. Check cancellation, and abandon the remaining writes if a library scan has
+   started since the run began.
+3. Revalidate the target against the conditions that admitted it, from a snapshot
+   of the item taken now: kind, virtual/extra status, path, path existence,
+   library membership, final-path prefix, and — the identity itself — that it
+   still reports every detached key the stranded rows matched on.  A metadata
+   refresh landing between analysis and write can replace an item's provider IDs,
+   and the item that answers to different keys is not the item the evidence was
+   about.
+4. Re-query `UserData` row *existence* for the exact pair, against the database
+   rather than through `IUserDataManager`.  The manager reports "no row" and "a
+   row holding defaults" identically, and the difference between them is the
+   difference between an item nobody has touched and an item somebody has just
+   deliberately cleared.  Any row at all: skip.
+5. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
+6. Call `IUserDataManager.SaveUserData(user, item, dto,
    UserDataSaveReason.UpdateUserData)`.
-5. Re-read through `IUserDataManager` and verify the six semantic fields.
-6. Query the current item's rows and verify that Jellyfin wrote the expected
+7. Re-read through `IUserDataManager` and verify the six semantic fields.
+8. Query the current item's rows and verify that Jellyfin wrote the expected
    current keys with the recovered state.
-7. Append and flush a completed ledger record.
-8. Report progress.
+9. Append and flush a completed ledger record.
+10. Report progress.
 
 Using the partial-update DTO preserves current audio/subtitle selections.  V1
 does not restore the detached stream indexes because they are positional and may
@@ -688,6 +720,14 @@ values make retries idempotent.
 Jellyfin provides no public compare-and-swap operation for user data.  A user can
 change an item between the final current-state check and the save.  Keeping the
 write sequence short narrows this window but cannot remove it.
+
+The window is now the gap between §9.2's row-existence query and the save on the
+next line, rather than the gap between analysis and apply.  That matters for the
+one case where the two differ in kind: clearing a played flag writes a row full
+of default values, which `IUserDataManager` cannot distinguish from no row at
+all, so a check made through the manager reads a deliberate clear as an untouched
+item and overwrites it.  Querying row existence directly is what closes that, and
+it has to happen immediately before the save to mean anything.
 
 Apply therefore requires a quiet maintenance window:
 

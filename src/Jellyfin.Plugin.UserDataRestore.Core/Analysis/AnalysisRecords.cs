@@ -84,6 +84,15 @@ public sealed record PlannedWrite
 
     /// <summary>Gets the fingerprints of the source rows this write came from.</summary>
     public required IReadOnlyList<string> SourceFingerprints { get; init; }
+
+    /// <summary>Gets the detached keys that matched the target.</summary>
+    /// <remarks>
+    /// The identity behind the write, carried so it can be checked again against
+    /// the live item immediately before writing (see
+    /// <see cref="TargetRevalidation"/>). A fingerprint identifies the source row;
+    /// this is what tied that row to this item.
+    /// </remarks>
+    public required IReadOnlyList<string> SourceKeys { get; init; }
 }
 
 /// <summary>

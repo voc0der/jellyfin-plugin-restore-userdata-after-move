@@ -204,6 +204,7 @@ public static class PlanBuilder
         State = ToPlanState(write.State),
         EvidenceRule = write.EvidenceRule,
         SourceFingerprints = [.. write.SourceFingerprints.Order(StringComparer.Ordinal)],
+        SourceKeys = ToSet(write.SourceKeys),
     };
 
     private static PlanState ToPlanState(RecoveryState state)

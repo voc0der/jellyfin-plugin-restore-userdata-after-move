@@ -326,6 +326,15 @@ public sealed record PlanWrite
     /// <summary>Gets the fingerprints of the source rows behind it.</summary>
     [JsonPropertyName("sourceFingerprints")]
     public IReadOnlyList<string> SourceFingerprints { get; init; } = [];
+
+    /// <summary>Gets the detached keys that tied those rows to this item.</summary>
+    /// <remarks>
+    /// Recorded because it is what the target is re-checked against immediately
+    /// before the write, so a plan reader can see the identity the run required
+    /// the item to still hold.
+    /// </remarks>
+    [JsonPropertyName("sourceKeys")]
+    public IReadOnlyList<string> SourceKeys { get; init; } = [];
 }
 
 /// <summary>The six recoverable fields, serialized.</summary>
