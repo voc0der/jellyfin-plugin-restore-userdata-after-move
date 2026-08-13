@@ -206,15 +206,31 @@ public static class PlanBuilder
         SourceFingerprints = [.. write.SourceFingerprints.Order(StringComparer.Ordinal)],
     };
 
-    private static PlanState ToPlanState(RecoveryState state) => new()
+    private static PlanState ToPlanState(RecoveryState state)
     {
-        Played = state.Played,
-        PlayCount = state.PlayCount,
-        PlaybackPositionTicks = state.PlaybackPositionTicks,
-        IsFavorite = state.IsFavorite,
-        LastPlayedDate = Format(state.LastPlayedDate),
-        Rating = state.Rating,
-    };
+        var finite = state.Rating is { } rating && double.IsFinite(rating);
+
+        return new PlanState
+        {
+            Played = state.Played,
+            PlayCount = state.PlayCount,
+            PlaybackPositionTicks = state.PlaybackPositionTicks,
+            IsFavorite = state.IsFavorite,
+            LastPlayedDate = Format(state.LastPlayedDate),
+
+            // JSON has no number for NaN or an infinity, and the serializer throws
+            // rather than inventing one. Such a rating is always rejected as
+            // invalid_source_state and never restored, but the row carrying it is
+            // still reported — and this document is written after the run's writes
+            // have landed, so letting it throw here would trade a row nobody acted
+            // on for the audit record of every restore that did happen. The value
+            // survives as text; the numeric field stays a number or nothing.
+            Rating = finite ? state.Rating : null,
+            RatingLiteral = finite || state.Rating is null
+                ? null
+                : state.Rating.Value.ToString("R", CultureInfo.InvariantCulture),
+        };
+    }
 
     // The plan's set-valued fields: key sets, library memberships, configured
     // prefixes. Deduplicated as well as ordered, because array *length* is part of

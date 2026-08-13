@@ -165,7 +165,10 @@ public class RestoreUserDataTask : IScheduledTask
 
         var fingerprintAfter = await reader.FingerprintAsync(cancellationToken).ConfigureAwait(false);
 
-        WritePlan(plugin, result, options, fingerprintBefore, fingerprintAfter);
+        // Ordered so the counts reach the log either way. The plan is written after
+        // the writes, because it records what they did, which means a plan that
+        // cannot be written would otherwise take the only account of them with it.
+        var planFailure = TryWritePlan(plugin, result, options, fingerprintBefore, fingerprintAfter);
         Report(result, applied, configuration.VerboseLogging);
 
         progress.Report(100);
@@ -175,7 +178,17 @@ public class RestoreUserDataTask : IScheduledTask
             throw new InvalidOperationException(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{applied.Failed} of {result.Writes.Count} restores did not complete: they threw, or the state did not read back. The stranded rows are untouched; the next run will retry them. The plan for this run was still written."));
+                    $"{applied.Failed} of {result.Writes.Count} restores did not complete: they threw, or the state did not read back. The stranded rows are untouched; the next run will retry them."),
+                planFailure);
+        }
+
+        if (planFailure is not null)
+        {
+            throw new InvalidOperationException(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The restores completed ({applied.Restored} restored, {applied.Skipped} skipped) but the plan for this run could not be written. What happened is in the log above; the artifact is missing."),
+                planFailure);
         }
     }
 
@@ -326,6 +339,36 @@ public class RestoreUserDataTask : IScheduledTask
         }
 
         return counts with { Restored = counts.Restored + 1 };
+    }
+
+    /// <summary>
+    /// Writes the plan, returning what stopped it rather than throwing.
+    /// </summary>
+    /// <remarks>
+    /// By the time this runs the writes have already happened, so an exception
+    /// escaping would trade the account of them for whatever went wrong building
+    /// the artifact. The failure is not swallowed — the caller rethrows it once the
+    /// counts are in the log, where an operator can still see what this run did.
+    /// </remarks>
+    private Exception? TryWritePlan(
+        Plugin plugin,
+        AnalysisResult result,
+        AnalysisOptions options,
+        Core.Verification.UserDataFingerprint before,
+        Core.Verification.UserDataFingerprint after)
+    {
+        try
+        {
+            WritePlan(plugin, result, options, before, after);
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(
+                ex,
+                "The plan for this run could not be written. The restores below already happened; this is the record of them that is missing.");
+            return ex;
+        }
     }
 
     private void WritePlan(

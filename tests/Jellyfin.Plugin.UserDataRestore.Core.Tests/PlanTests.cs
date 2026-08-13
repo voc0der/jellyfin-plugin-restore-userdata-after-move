@@ -243,6 +243,47 @@ public class PlanTests
         Assert.Contains(store.List(), stored => stored.ShortPlanId == PlanStore.Shorten(oldest.PlanId));
     }
 
+    [Theory]
+    [InlineData(double.NaN, "NaN")]
+    [InlineData(double.PositiveInfinity, "Infinity")]
+    [InlineData(double.NegativeInfinity, "-Infinity")]
+    public void ARowWhoseRatingJsonCannotExpressStillProducesAPlan(double rating, string expected)
+    {
+        // The validator already rejects these as invalid_source_state, so such a
+        // row is only ever reported — but it is reported inside an artifact that
+        // is written after the run's writes have already landed. A number the
+        // serializer refuses would take the audit record of those writes with it,
+        // so the value is carried as a literal and the numeric field left null.
+        var plan = BuildPlan(
+        [
+            Scenario.Row(Scenario.UserA, "tt0133093"),
+            Scenario.Row(Scenario.UserB, "603", rating: rating),
+        ]);
+
+        var broken = Assert.Single(plan.SourceRows, row => row.UserId == Scenario.UserB.ToString("D"));
+        Assert.Equal(ReasonCodes.ToWire(ReasonCode.InvalidSourceState), broken.Reason);
+        Assert.Null(broken.State.Rating);
+        Assert.Equal(expected, broken.State.RatingLiteral);
+
+        // The write that had nothing to do with the malformed row still reaches
+        // the plan, which is the whole point of not throwing.
+        Assert.Single(plan.Writes);
+        Assert.True(PlanCanonicalizer.VerifyPlanId(plan));
+        Assert.True(PlanCanonicalizer.VerifyPlanId(
+            PlanCanonicalizer.FromJson(PlanCanonicalizer.ToReadableJson(plan))));
+    }
+
+    [Fact]
+    public void AFiniteRatingCarriesNoLiteral()
+    {
+        var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093", rating: 9)]);
+
+        var write = Assert.Single(plan.Writes);
+        Assert.Equal(9, write.State.Rating);
+        Assert.Null(write.State.RatingLiteral);
+        Assert.DoesNotContain("ratingLiteral", PlanCanonicalizer.ToReadableJson(plan), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheSummaryCarriesEveryReasonCode()
     {

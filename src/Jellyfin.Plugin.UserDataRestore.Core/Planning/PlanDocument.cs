@@ -352,8 +352,29 @@ public sealed record PlanState
     public string? LastPlayedDate { get; init; }
 
     /// <summary>Gets the rating.</summary>
+    /// <remarks>
+    /// Always a finite number or null. A value JSON has no number for is carried
+    /// in <see cref="RatingLiteral"/> instead.
+    /// </remarks>
     [JsonPropertyName("rating")]
     public double? Rating { get; init; }
+
+    /// <summary>Gets the rating as text, when JSON has no number for it.</summary>
+    /// <remarks>
+    /// <para><c>NaN</c> and the infinities are rejected by
+    /// <see cref="Analysis.SourceStateValidator"/> and can never be restored, but
+    /// the row holding one is still reported — inside an artifact written after
+    /// this run's writes have already landed. Serializing one as a JSON number
+    /// throws, and that would destroy the record of the writes that did succeed.
+    /// So the numeric field is left null and the original value is preserved
+    /// here.</para>
+    /// <para>Omitted entirely for a finite rating, which is every rating in
+    /// practice. Its presence is a function of the data alone, so the plan ID
+    /// stays reproducible.</para>
+    /// </remarks>
+    [JsonPropertyName("ratingLiteral")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RatingLiteral { get; init; }
 }
 
 /// <summary>Fields recorded for review but never restored in v1 (DESIGN §9.2).</summary>
