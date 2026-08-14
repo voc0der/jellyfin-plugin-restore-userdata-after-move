@@ -636,8 +636,32 @@ Minimum contents:
 - each source row's user ID, key, retention date, state, and source fingerprint,
 - target item ID, type, name, path, library ID, and complete key set,
 - target-row existence and semantic-state result,
-- the exact ordered list of `ready` writes,
+- the exact ordered list of `ready` writes, **each carrying what became of it**,
 - canonical SHA-256 plan ID.
+
+The outcome per write is what makes the array an account rather than an
+intention.  It is the one field in the document the analysis cannot supply, and
+without it a target skipped by a guard, a write that threw, and a completed
+restore are the same three lines of JSON — so a plan that named itself the record
+of what a run performed was materially false on every partial run, and could not
+answer which `(user, item)` pairs had actually changed.  Five outcomes, and the
+line between them is what the run can still prove about the item:
+
+| Outcome | Meaning |
+|---|---|
+| `restored` | Saved and read back equal. |
+| `skipped` | A guard declined it. The target is provably untouched. |
+| `failed` | Something threw *before* the save. The target is provably untouched. |
+| `uncertain` | The save was entered and its result is unknown: it threw — possibly after committing — or the state did not read back. |
+| `not_attempted` | The run ended before reaching it. The target was never touched. |
+
+Every planned write appears, including the ones a stopped run never reached.
+Omitting those would read as though they had never been planned.
+
+The post-run table fingerprint is nullable for the same reason: it is taken after
+the writes have landed, so a server going away underneath it must not cost the
+record of the restores it was going to be proof about.  A null there is a stated
+absence of proof, not a gap in the document.
 
 The plan hash covers every field except the ID itself.  Canonical serialization
 sorts object properties by name and **preserves array order**, so the ordered

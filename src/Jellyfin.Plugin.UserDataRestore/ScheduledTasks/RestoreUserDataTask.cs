@@ -162,25 +162,28 @@ public class RestoreUserDataTask : IScheduledTask
         var result = await AnalyzeAsync(options, reader, cancellationToken).ConfigureAwait(false);
         progress.Report(50);
 
-        var applied = await ApplyAsync(result.Writes, options, reader, progress, cancellationToken).ConfigureAwait(false);
+        var outcomes = await ApplyAsync(result.Writes, options, reader, progress, cancellationToken).ConfigureAwait(false);
         progress.Report(95);
 
-        var fingerprintAfter = await reader.FingerprintAsync(cancellationToken).ConfigureAwait(false);
+        var fingerprintAfter = await TryFingerprintAsync(reader, cancellationToken).ConfigureAwait(false);
 
         // Ordered so the counts reach the log either way. The plan is written after
         // the writes, because it records what they did, which means a plan that
         // cannot be written would otherwise take the only account of them with it.
-        var planFailure = TryWritePlan(plugin, result, options, fingerprintBefore, fingerprintAfter);
-        Report(result, applied, configuration.VerboseLogging);
+        var planFailure = TryWritePlan(plugin, result, options, fingerprintBefore, fingerprintAfter, outcomes);
+        Report(result, outcomes, configuration.VerboseLogging);
 
         progress.Report(100);
 
-        if (applied.Failed > 0)
+        var uncertain = CountOf(outcomes, WriteOutcome.Uncertain);
+        var failed = CountOf(outcomes, WriteOutcome.Failed);
+
+        if (uncertain + failed > 0)
         {
             throw new InvalidOperationException(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{applied.Failed} of {result.Writes.Count} restores did not complete: they threw, or the state did not read back. The stranded rows are untouched; the next run will retry them."),
+                    $"{uncertain + failed} of {result.Writes.Count} restores did not complete: {failed} threw before writing anything and {uncertain} were left in an unknown state. The stranded rows are untouched; the next run will retry them."),
                 planFailure);
         }
 
@@ -189,7 +192,7 @@ public class RestoreUserDataTask : IScheduledTask
             throw new InvalidOperationException(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"The restores completed ({applied.Restored} restored, {applied.Skipped} skipped) but the plan for this run could not be written. What happened is in the log above; the artifact is missing."),
+                    $"The restores completed ({CountOf(outcomes, WriteOutcome.Restored)} restored, {CountOf(outcomes, WriteOutcome.Skipped)} skipped) but the plan for this run could not be written. What happened is in the log above; the artifact is missing."),
                 planFailure);
         }
     }
@@ -288,7 +291,16 @@ public class RestoreUserDataTask : IScheduledTask
         return DetachedUserDataAnalyzer.Complete(candidates, currentRows);
     }
 
-    private async Task<AppliedCounts> ApplyAsync(
+    /// <summary>
+    /// Performs the writes, returning what became of every one of them.
+    /// </summary>
+    /// <remarks>
+    /// The returned list always has one entry per planned write, in the planned
+    /// order, whether or not the run reached it. That is what makes it usable as
+    /// the plan's record: an artifact that simply omitted the writes a run
+    /// abandoned would read as though they had never been planned.
+    /// </remarks>
+    private async Task<IReadOnlyList<WriteResult>> ApplyAsync(
         IReadOnlyList<PlannedWrite> writes,
         AnalysisOptions options,
         UserDataReader reader,
@@ -297,7 +309,7 @@ public class RestoreUserDataTask : IScheduledTask
     {
         if (writes.Count == 0)
         {
-            return default;
+            return [];
         }
 
         var writer = new UserDataWriter(_userDataManager);
@@ -311,7 +323,7 @@ public class RestoreUserDataTask : IScheduledTask
         // against is read from the live item inside the loop.
         var ownership = collector.BuildKeyOwnership(cancellationToken);
 
-        var counts = default(AppliedCounts);
+        var results = new List<WriteResult>(writes.Count);
 
         for (var index = 0; index < writes.Count; index++)
         {
@@ -324,64 +336,81 @@ public class RestoreUserDataTask : IScheduledTask
             // rows are untouched and the next run plans them again.
             if (LibraryScanIsRunning())
             {
-                var abandoned = writes.Count - index;
                 _logger.LogWarning(
                     "A library scan started part-way through this run. Abandoning the remaining {Count} restores; "
                     + "the stranded rows are untouched, so the next run picks them up.",
-                    abandoned);
-                counts = counts with { Skipped = counts.Skipped + abandoned };
+                    writes.Count - index);
+                results.AddRange(writes.Skip(index).Select(write => WriteResult.NotAttempted(write, "library_scan_started")));
                 break;
             }
 
-            counts = await ApplyAsync(writer, reader, collector, writes[index], options, ownership, counts, cancellationToken)
-                .ConfigureAwait(false);
+            results.Add(await ApplyAsync(writer, reader, collector, writes[index], options, ownership, cancellationToken)
+                .ConfigureAwait(false));
             progress.Report(50 + (45.0 * (index + 1) / writes.Count));
         }
 
-        return counts;
+        return results;
     }
 
     /// <remarks>
-    /// Nothing in here is allowed to escape except cancellation. A write that
-    /// throws must not take the rest of the batch with it, and — more importantly
-    /// — must not skip the plan: the plan is written after this pass, so an
-    /// exception escaping here would leave user state changed with no record of
-    /// what changed it. A failure is counted, logged, and the run carries on.
+    /// <para>Nothing in here is allowed to escape except cancellation. A write
+    /// that throws must not skip the plan: the plan is written after this pass, so
+    /// an exception escaping here would leave user state changed with no record of
+    /// what changed it.</para>
+    /// <para>Which side of the save it threw on is the whole of the difference
+    /// between <see cref="WriteOutcome.Failed"/> and
+    /// <see cref="WriteOutcome.Uncertain"/>. Everything before the save leaves the
+    /// target provably untouched. The save itself does not: it can throw after the
+    /// database has already committed, so once it has been entered the honest
+    /// answer about that item is that nobody knows.</para>
     /// </remarks>
-    private async Task<AppliedCounts> ApplyAsync(
+    private async Task<WriteResult> ApplyAsync(
         UserDataWriter writer,
         UserDataReader reader,
         LibraryItemCollector collector,
         PlannedWrite write,
         AnalysisOptions options,
         KeyOwnership ownership,
-        AppliedCounts counts,
         CancellationToken cancellationToken)
     {
+        var saveEntered = false;
+
         try
         {
-            return await ApplyCoreAsync(writer, reader, collector, write, options, ownership, counts, cancellationToken)
+            return await ApplyCoreAsync(
+                writer, reader, collector, write, options, ownership, () => saveEntered = true, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            if (saveEntered)
+            {
+                _logger.LogError(
+                    ex,
+                    "Restoring user {UserId} item {ItemId} threw during the save. Whether it landed is unknown - the save can throw "
+                    + "after the database has committed. The stranded row is untouched, so the state is recoverable either way.",
+                    write.UserId,
+                    write.ItemId);
+                return new WriteResult(write, WriteOutcome.Uncertain, "save_threw");
+            }
+
             _logger.LogError(
                 ex,
-                "Restoring user {UserId} item {ItemId} threw. The stranded row is untouched, so the next run retries it.",
+                "Restoring user {UserId} item {ItemId} threw before the save was attempted, so the item is untouched. The next run retries it.",
                 write.UserId,
                 write.ItemId);
-            return counts with { Failed = counts.Failed + 1 };
+            return new WriteResult(write, WriteOutcome.Failed, "threw_before_save");
         }
     }
 
-    private async Task<AppliedCounts> ApplyCoreAsync(
+    private async Task<WriteResult> ApplyCoreAsync(
         UserDataWriter writer,
         UserDataReader reader,
         LibraryItemCollector collector,
         PlannedWrite write,
         AnalysisOptions options,
         KeyOwnership ownership,
-        AppliedCounts counts,
+        Action enteringSave,
         CancellationToken cancellationToken)
     {
         var user = _userManager.GetUserById(write.UserId);
@@ -393,7 +422,7 @@ public class RestoreUserDataTask : IScheduledTask
                 "User {UserId} or item {ItemId} disappeared between analysis and write; skipping.",
                 write.UserId,
                 write.ItemId);
-            return counts with { Skipped = counts.Skipped + 1 };
+            return new WriteResult(write, WriteOutcome.Skipped, user is null ? "user_gone" : "item_gone");
         }
 
         // Everything that admitted this target, asked again of the item as it is
@@ -411,7 +440,7 @@ public class RestoreUserDataTask : IScheduledTask
                 write.ItemId,
                 write.UserId,
                 disqualification);
-            return counts with { Skipped = counts.Skipped + 1 };
+            return new WriteResult(write, WriteOutcome.Skipped, disqualification);
         }
 
         // Cheap second opinion through the manager, which sees state the database
@@ -422,7 +451,7 @@ public class RestoreUserDataTask : IScheduledTask
                 "Item {ItemId} gained user state for {UserId} since the analysis; leaving it alone.",
                 write.ItemId,
                 write.UserId);
-            return counts with { Skipped = counts.Skipped + 1 };
+            return new WriteResult(write, WriteOutcome.Skipped, "target_gained_state");
         }
 
         // Row existence, straight from the database, because the manager cannot
@@ -445,9 +474,13 @@ public class RestoreUserDataTask : IScheduledTask
                 + "A row holding default values is an explicit clear, not an absence.",
                 write.UserId,
                 write.ItemId);
-            return counts with { Skipped = counts.Skipped + 1 };
+            return new WriteResult(write, WriteOutcome.Skipped, "row_exists");
         }
 
+        // Past this line nothing about the target is provable any more, which is
+        // why it is the last one: everything above declines cleanly, and the item
+        // is untouched whatever happens.
+        enteringSave();
         writer.Save(user, item, write.State);
 
         // Read back through the manager rather than trusting the call: the point
@@ -455,13 +488,43 @@ public class RestoreUserDataTask : IScheduledTask
         if (!RecoveryStateComparer.Semantic.Equals(writer.Read(user, item), write.State))
         {
             _logger.LogError(
-                "Wrote user {UserId} item {ItemId} but read back different state. The stranded row is untouched.",
+                "Wrote user {UserId} item {ItemId} but read back different state. What the item holds now is not what was asked for "
+                + "and not necessarily what it held before. The stranded row is untouched.",
                 write.UserId,
                 write.ItemId);
-            return counts with { Failed = counts.Failed + 1 };
+            return new WriteResult(write, WriteOutcome.Uncertain, "verification_mismatch");
         }
 
-        return counts with { Restored = counts.Restored + 1 };
+        return new WriteResult(write, WriteOutcome.Restored, null);
+    }
+
+    /// <summary>
+    /// Takes the post-run fingerprint, returning null rather than throwing.
+    /// </summary>
+    /// <remarks>
+    /// This is the proof that the run changed only what it says it changed, and
+    /// it is taken after the writes have already landed. A server going away
+    /// underneath it — a shutdown cancelling the run, a database that will not
+    /// open — must not cost the record of the restores the proof was about, so a
+    /// failure here is recorded as a missing fingerprint and the plan is written
+    /// without it.
+    /// </remarks>
+    private async Task<Core.Verification.UserDataFingerprint?> TryFingerprintAsync(
+        UserDataReader reader,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await reader.FingerprintAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "The post-run fingerprint of the UserData table could not be taken, so this run's plan cannot prove what it left behind. "
+                + "What it did is still recorded below.");
+            return null;
+        }
     }
 
     /// <summary>
@@ -478,11 +541,12 @@ public class RestoreUserDataTask : IScheduledTask
         AnalysisResult result,
         AnalysisOptions options,
         Core.Verification.UserDataFingerprint before,
-        Core.Verification.UserDataFingerprint after)
+        Core.Verification.UserDataFingerprint? after,
+        IReadOnlyList<WriteResult> outcomes)
     {
         try
         {
-            WritePlan(plugin, result, options, before, after);
+            WritePlan(plugin, result, options, before, after, outcomes);
             return null;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -499,7 +563,8 @@ public class RestoreUserDataTask : IScheduledTask
         AnalysisResult result,
         AnalysisOptions options,
         Core.Verification.UserDataFingerprint before,
-        Core.Verification.UserDataFingerprint after)
+        Core.Verification.UserDataFingerprint? after,
+        IReadOnlyList<WriteResult> outcomes)
     {
         var plan = PlanBuilder.Build(result, new PlanContext
         {
@@ -513,6 +578,7 @@ public class RestoreUserDataTask : IScheduledTask
             Options = options,
             FingerprintBefore = before,
             FingerprintAfter = after,
+            WriteResults = outcomes,
         });
 
         var store = new PlanStore(plugin.PlanDirectory);
@@ -522,13 +588,15 @@ public class RestoreUserDataTask : IScheduledTask
         _logger.LogInformation("{Summary}", AnalysisSummary.Render(result, plan.PlanId, path));
     }
 
-    private void Report(AnalysisResult result, AppliedCounts applied, bool verbose)
+    private void Report(AnalysisResult result, IReadOnlyList<WriteResult> outcomes, bool verbose)
     {
         _logger.LogInformation(
-            "Restored {Restored} snapshots, skipped {Skipped}, failed {Failed}.",
-            applied.Restored,
-            applied.Skipped,
-            applied.Failed);
+            "Restored {Restored} snapshots, skipped {Skipped}, failed {Failed}, left {Uncertain} uncertain, did not attempt {NotAttempted}.",
+            CountOf(outcomes, WriteOutcome.Restored),
+            CountOf(outcomes, WriteOutcome.Skipped),
+            CountOf(outcomes, WriteOutcome.Failed),
+            CountOf(outcomes, WriteOutcome.Uncertain),
+            CountOf(outcomes, WriteOutcome.NotAttempted));
 
         foreach (var code in ReasonCodes.All.Where(
             code => result.CandidateCounts[code] > 0 || result.RowCounts[code] > 0))
@@ -580,6 +648,6 @@ public class RestoreUserDataTask : IScheduledTask
         }
     }
 
-    /// <summary>What one run actually did.</summary>
-    private readonly record struct AppliedCounts(int Restored, int Skipped, int Failed);
+    private static int CountOf(IReadOnlyList<WriteResult> outcomes, WriteOutcome outcome) =>
+        outcomes.Count(result => result.Outcome == outcome);
 }

@@ -35,8 +35,23 @@ public sealed record PlanContext
     /// <summary>Gets the table fingerprint taken before analysis.</summary>
     public required UserDataFingerprint FingerprintBefore { get; init; }
 
-    /// <summary>Gets the table fingerprint taken after analysis.</summary>
-    public required UserDataFingerprint FingerprintAfter { get; init; }
+    /// <summary>
+    /// Gets the table fingerprint taken after the writes, or null if it could not
+    /// be taken.
+    /// </summary>
+    public required UserDataFingerprint? FingerprintAfter { get; init; }
+
+    /// <summary>
+    /// Gets what became of each planned write, in the order the analysis planned
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// Supplied by the host rather than derived from the analysis, because it is
+    /// the one thing in the plan the analysis cannot know. It must cover every
+    /// planned write — a run that stopped early reports the rest as
+    /// <see cref="WriteOutcome.NotAttempted"/> rather than omitting them.
+    /// </remarks>
+    public required IReadOnlyList<WriteResult> WriteResults { get; init; }
 }
 
 /// <summary>
@@ -55,6 +70,18 @@ public static class PlanBuilder
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(context);
 
+        // The plan says what this run did, so a result list that does not line up
+        // with the writes it claims to describe is a bug worth failing on rather
+        // than an artifact worth publishing.
+        if (context.WriteResults.Count != result.Writes.Count)
+        {
+            throw new ArgumentException(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The run reported {context.WriteResults.Count} outcomes for {result.Writes.Count} planned writes."),
+                nameof(context));
+        }
+
         var plan = new PlanDocument
         {
             PluginVersion = context.PluginVersion,
@@ -70,14 +97,14 @@ public static class PlanBuilder
             // Recorded in the artifact so a plan written by an analysis-only build
             // can never be mistaken for one this build produced.
             ApplySupported = true,
-            Summary = BuildSummary(result),
+            Summary = BuildSummary(result, context.WriteResults),
             TableChange = new PlanTableChange
             {
                 RowCountBefore = context.FingerprintBefore.RowCount,
-                RowCountAfter = context.FingerprintAfter.RowCount,
+                RowCountAfter = context.FingerprintAfter?.RowCount,
                 DigestBefore = context.FingerprintBefore.Digest,
-                DigestAfter = context.FingerprintAfter.Digest,
-                Unchanged = context.FingerprintBefore == context.FingerprintAfter,
+                DigestAfter = context.FingerprintAfter?.Digest,
+                Unchanged = context.FingerprintAfter is { } after ? context.FingerprintBefore == after : null,
             },
             // Array order and length are both part of the plan ID (see
             // PlanCanonicalizer), so every array in the document leaves here in a
@@ -91,13 +118,13 @@ public static class PlanBuilder
                 .ThenBy(row => row.CustomDataKey, StringComparer.Ordinal)
                 .ThenBy(row => row.Fingerprint, StringComparer.Ordinal)],
             Candidates = [.. result.Candidates.Select(ToPlanCandidate)],
-            Writes = [.. result.Writes.Select(ToPlanWrite)],
+            Writes = [.. context.WriteResults.Select(ToPlanWrite)],
         };
 
         return PlanCanonicalizer.Seal(plan);
     }
 
-    private static PlanSummary BuildSummary(AnalysisResult result)
+    private static PlanSummary BuildSummary(AnalysisResult result, IReadOnlyList<WriteResult> outcomes)
     {
         var diagnostics = new Dictionary<string, long>(StringComparer.Ordinal)
         {
@@ -129,6 +156,10 @@ public static class PlanBuilder
             RowCounts = ToWireCounts(result.RowCounts),
             CandidateCounts = ToWireCounts(result.CandidateCounts),
             WriteCount = result.Writes.Count,
+            WriteOutcomeCounts = WriteOutcomes.All.ToDictionary(
+                WriteOutcomes.ToWire,
+                outcome => outcomes.Count(entry => entry.Outcome == outcome),
+                StringComparer.Ordinal),
             Diagnostics = diagnostics,
         };
     }
@@ -197,14 +228,16 @@ public static class PlanBuilder
         Reason = ReasonCodes.ToWire(record.Reason),
     };
 
-    private static PlanWrite ToPlanWrite(PlannedWrite write) => new()
+    private static PlanWrite ToPlanWrite(WriteResult result) => new()
     {
-        UserId = Format(write.UserId),
-        ItemId = Format(write.ItemId),
-        State = ToPlanState(write.State),
-        EvidenceRule = write.EvidenceRule,
-        SourceFingerprints = [.. write.SourceFingerprints.Order(StringComparer.Ordinal)],
-        SourceKeys = ToSet(write.SourceKeys),
+        UserId = Format(result.Write.UserId),
+        ItemId = Format(result.Write.ItemId),
+        State = ToPlanState(result.Write.State),
+        EvidenceRule = result.Write.EvidenceRule,
+        SourceFingerprints = [.. result.Write.SourceFingerprints.Order(StringComparer.Ordinal)],
+        SourceKeys = ToSet(result.Write.SourceKeys),
+        Outcome = WriteOutcomes.ToWire(result.Outcome),
+        OutcomeDetail = result.Detail,
     };
 
     private static PlanState ToPlanState(RecoveryState state)

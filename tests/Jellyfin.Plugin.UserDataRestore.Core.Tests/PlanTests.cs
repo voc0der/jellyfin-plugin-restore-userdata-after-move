@@ -296,11 +296,101 @@ public class PlanTests
         }
     }
 
+    [Fact]
+    public void EveryWriteRecordsWhatBecameOfIt()
+    {
+        var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")]);
+
+        var write = Assert.Single(plan.Writes);
+        Assert.Equal("restored", write.Outcome);
+        Assert.Null(write.OutcomeDetail);
+    }
+
+    [Fact]
+    public void AMixedRunIsNotReportedAsAllRestored()
+    {
+        // The regression this exists for: the plan copied every analysis-time
+        // `ready` write into `writes` and called the array the list of restores
+        // the run performed. A skip, a throw and a completed restore then read
+        // identically, and the artifact claimed all three had happened.
+        var plan = BuildPlan(
+            [
+                Scenario.Row(Scenario.UserA, "tt0133093"),
+                Scenario.Row(Scenario.UserB, "tt0133093", played: false, rating: 1),
+            ],
+            outcomes: result =>
+            [
+                new WriteResult(result.Writes[0], WriteOutcome.Restored, null),
+                new WriteResult(result.Writes[1], WriteOutcome.Skipped, "row_exists"),
+            ]);
+
+        Assert.Equal(2, plan.Summary.WriteCount);
+        Assert.Equal(["restored", "skipped"], plan.Writes.Select(write => write.Outcome));
+        Assert.Equal([null, "row_exists"], plan.Writes.Select(write => write.OutcomeDetail));
+        Assert.Equal(1, plan.Summary.WriteOutcomeCounts["restored"]);
+        Assert.Equal(1, plan.Summary.WriteOutcomeCounts["skipped"]);
+        Assert.Equal(0, plan.Summary.WriteOutcomeCounts["uncertain"]);
+    }
+
+    [Fact]
+    public void TheSummaryCarriesEveryOutcomeIncludingTheZeroes()
+    {
+        // "Nothing ended uncertain" is the answer to the question this block
+        // exists to raise, and an absent key does not say it.
+        var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")]);
+
+        foreach (var outcome in WriteOutcomes.All)
+        {
+            Assert.True(plan.Summary.WriteOutcomeCounts.ContainsKey(WriteOutcomes.ToWire(outcome)));
+        }
+    }
+
+    [Fact]
+    public void TwoRunsThatDifferOnlyInOutcomeDoNotShareAPlanId()
+    {
+        var restored = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")]);
+        var uncertain = BuildPlan(
+            [Scenario.Row(Scenario.UserA, "tt0133093")],
+            outcomes: result => [new WriteResult(result.Writes[0], WriteOutcome.Uncertain, "save_threw")]);
+
+        Assert.NotEqual(restored.PlanId, uncertain.PlanId);
+        Assert.True(PlanCanonicalizer.VerifyPlanId(uncertain));
+    }
+
+    [Fact]
+    public void OutcomesMustCoverEveryPlannedWrite()
+    {
+        // A short list would silently drop writes off the end of the record.
+        Assert.Throws<ArgumentException>(() => BuildPlan(
+            [
+                Scenario.Row(Scenario.UserA, "tt0133093"),
+                Scenario.Row(Scenario.UserB, "tt0133093", played: false, rating: 1),
+            ],
+            outcomes: result => [new WriteResult(result.Writes[0], WriteOutcome.Restored, null)]));
+    }
+
+    [Fact]
+    public void APlanSurvivesTheLossOfItsClosingFingerprint()
+    {
+        // Taken after the writes have landed, so losing it must not cost the
+        // record of the restores it was going to be proof about.
+        var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")], dropAfter: true);
+
+        Assert.Null(plan.TableChange.RowCountAfter);
+        Assert.Null(plan.TableChange.DigestAfter);
+        Assert.Null(plan.TableChange.Unchanged);
+        Assert.Equal("abc", plan.TableChange.DigestBefore);
+        Assert.Single(plan.Writes);
+        Assert.True(PlanCanonicalizer.VerifyPlanId(plan));
+    }
+
     private static PlanDocument BuildPlan(
         IReadOnlyList<DetachedUserDataRow> rows,
         DateTimeOffset? created = null,
         CurrentItemSnapshot? target = null,
-        AnalysisOptions? options = null)
+        AnalysisOptions? options = null,
+        Func<AnalysisResult, IReadOnlyList<WriteResult>>? outcomes = null,
+        bool dropAfter = false)
     {
         options ??= Scenario.Options();
         var result = Scenario.Analyze(rows, [target ?? Scenario.Movie(MovieId)], options: options);
@@ -316,9 +406,14 @@ public class PlanTests
             CreatedUtc = created ?? new DateTimeOffset(2026, 8, 12, 15, 0, 0, TimeSpan.Zero),
             Options = options,
             FingerprintBefore = new UserDataFingerprint(10, "abc"),
-            FingerprintAfter = new UserDataFingerprint(10, "abc"),
+            FingerprintAfter = dropAfter ? null : new UserDataFingerprint(10, "abc"),
+            WriteResults = outcomes is null ? AllRestored(result) : outcomes(result),
         });
     }
+
+    /// <summary>The happy path: every planned write landed and verified.</summary>
+    private static IReadOnlyList<WriteResult> AllRestored(AnalysisResult result) =>
+        [.. result.Writes.Select(write => new WriteResult(write, WriteOutcome.Restored, null))];
 
     private sealed class TemporaryDirectory : IDisposable
     {

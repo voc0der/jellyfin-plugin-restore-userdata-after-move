@@ -15,7 +15,13 @@ namespace Jellyfin.Plugin.UserDataRestore.Core.Planning;
 public sealed record PlanDocument
 {
     /// <summary>The schema version of plans this build writes.</summary>
-    public const string CurrentSchemaVersion = "1";
+    /// <remarks>
+    /// Bumped to 2 when every entry in <c>writes</c> gained an <c>outcome</c> and
+    /// the post-run half of <c>userDataTable</c> became nullable. A v1 reader
+    /// would take a v2 <c>writes</c> array for a list of completed restores,
+    /// which for a partial run it is not.
+    /// </remarks>
+    public const string CurrentSchemaVersion = "2";
 
     /// <summary>Gets the plan schema version.</summary>
     [JsonPropertyName("schemaVersion")]
@@ -88,7 +94,15 @@ public sealed record PlanDocument
     [JsonPropertyName("candidates")]
     public IReadOnlyList<PlanCandidate> Candidates { get; init; } = [];
 
-    /// <summary>Gets the exact ordered list of restores this run performed.</summary>
+    /// <summary>
+    /// Gets the exact ordered list of writes this run planned, each carrying what
+    /// became of it.
+    /// </summary>
+    /// <remarks>
+    /// Planned, not performed. An entry is a restore only if its
+    /// <see cref="PlanWrite.Outcome"/> says so; the rest were skipped by a guard,
+    /// failed before the save, ended uncertain, or were never reached.
+    /// </remarks>
     [JsonPropertyName("writes")]
     public IReadOnlyList<PlanWrite> Writes { get; init; } = [];
 
@@ -115,6 +129,14 @@ public sealed record PlanSummary
     [JsonPropertyName("writeCount")]
     public int WriteCount { get; init; }
 
+    /// <summary>Gets how those writes ended, keyed by outcome wire name.</summary>
+    /// <remarks>
+    /// Every outcome appears, including the zeroes: "nothing ended uncertain" is
+    /// the answer to the question this block exists to raise.
+    /// </remarks>
+    [JsonPropertyName("writeOutcomes")]
+    public required IReadOnlyDictionary<string, int> WriteOutcomeCounts { get; init; }
+
     /// <summary>Gets the run-level observations.</summary>
     [JsonPropertyName("diagnostics")]
     public required IReadOnlyDictionary<string, long> Diagnostics { get; init; }
@@ -125,27 +147,36 @@ public sealed record PlanSummary
 /// restored nothing leaves these identical, which is the cheapest possible proof
 /// that it touched nothing.
 /// </summary>
+/// <remarks>
+/// The post-run half is nullable, and null is a real answer rather than a gap:
+/// the fingerprint is taken after the writes have landed, so a run whose server
+/// went away underneath it still has restores worth recording. Losing the proof
+/// must not cost the record of what the proof was about.
+/// </remarks>
 public sealed record PlanTableChange
 {
     /// <summary>Gets the row count before the run.</summary>
     [JsonPropertyName("rowCountBefore")]
     public required int RowCountBefore { get; init; }
 
-    /// <summary>Gets the row count after the run.</summary>
+    /// <summary>Gets the row count after the run, or null if it could not be taken.</summary>
     [JsonPropertyName("rowCountAfter")]
-    public required int RowCountAfter { get; init; }
+    public required int? RowCountAfter { get; init; }
 
     /// <summary>Gets the table digest before the run.</summary>
     [JsonPropertyName("digestBefore")]
     public required string DigestBefore { get; init; }
 
-    /// <summary>Gets the table digest after the run.</summary>
+    /// <summary>Gets the table digest after the run, or null if it could not be taken.</summary>
     [JsonPropertyName("digestAfter")]
-    public required string DigestAfter { get; init; }
+    public required string? DigestAfter { get; init; }
 
-    /// <summary>Gets a value indicating whether the table is byte-for-byte unchanged.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the table is byte-for-byte unchanged, or
+    /// null if the post-run fingerprint could not be taken.
+    /// </summary>
     [JsonPropertyName("unchanged")]
-    public required bool Unchanged { get; init; }
+    public required bool? Unchanged { get; init; }
 }
 
 /// <summary>One detached row's disposition.</summary>
@@ -335,6 +366,19 @@ public sealed record PlanWrite
     /// </remarks>
     [JsonPropertyName("sourceKeys")]
     public IReadOnlyList<string> SourceKeys { get; init; } = [];
+
+    /// <summary>Gets what became of this write.</summary>
+    /// <remarks>
+    /// The field that makes the array honest. Without it a skipped target, a
+    /// write that threw, and a completed restore are the same three lines of
+    /// JSON, and the artifact claims all three happened.
+    /// </remarks>
+    [JsonPropertyName("outcome")]
+    public required string Outcome { get; init; }
+
+    /// <summary>Gets the short reason behind the outcome, when there is one.</summary>
+    [JsonPropertyName("outcomeDetail")]
+    public string? OutcomeDetail { get; init; }
 }
 
 /// <summary>The six recoverable fields, serialized.</summary>
