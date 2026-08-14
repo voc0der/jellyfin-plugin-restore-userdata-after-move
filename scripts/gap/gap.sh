@@ -933,6 +933,50 @@ planned_writes() { jq -r '.writes | length' "$PLAN"; }
 ready_count() { jq -r '.summary.candidateCounts.ready' "$PLAN"; }
 reason_count() { jq -r --arg r "$1" '.summary.candidateCounts[$r] // 0' "$PLAN"; }
 
+# Where the plugin's own settings land, so the run can be caught honouring one it
+# should not.
+PLUGIN_CONFIG=""
+
+# 1.0.0.7 and earlier exposed the two path settings; 1.0.0.8 removed the controls
+# and kept reading the fields, so an upgraded install carried whatever was last
+# saved and went on obeying it from a page that no longer showed it. This plants
+# exactly that install: a final-path prefix no title on this server sits beneath,
+# and the media-file check turned off.
+#
+# The prefix is chosen to be load-bearing. If the run honours it, every target
+# fails the path check and the restore count assertion above fails first — so
+# these settings cannot be quietly reintroduced and covered by a green line.
+#
+# Written while the server is stopped, and the file is created rather than
+# edited: the plugin only persists a configuration once something reads one, so
+# on a fresh install none exists yet. That is exactly the shape of the upgrade
+# being reproduced — a file that predates this build. If the name were wrong the
+# plugin would never read it, the migration would not fire, and the two
+# assertions below would fail rather than pass by omission.
+plant_legacy_configuration() {
+    PLUGIN_CONFIG="$DATA/plugins/configurations/Jellyfin.Plugin.UserDataRestore.xml"
+    mkdir -p "$(dirname "$PLUGIN_CONFIG")"
+
+    cat > "$PLUGIN_CONFIG" <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <EligibleLibraryIds />
+  <FinalPathPrefixes>
+    <string>/nowhere/a/title/lives</string>
+  </FinalPathPrefixes>
+  <RequirePathExists>false</RequirePathExists>
+  <VerboseLogging>false</VerboseLogging>
+</PluginConfiguration>
+XML
+    info "planted a 1.0.0.7-era scope override: prefix /nowhere/a/title/lives, file check off"
+}
+
+# What the run says became of those writes. The plan is only an audit record if
+# this agrees with the database, and the unit tests cannot check that agreement:
+# they can prove the outcome is carried through the document, not that a real
+# server produced `restored` for a write whose state is genuinely back.
+outcome_count() { jq -r --arg o "$1" '.summary.writeOutcomes[$o] // 0' "$PLAN"; }
+
 # Source rows are classified separately from candidates: a stranded row that
 # matches no current item never becomes a candidate at all, so its reason only
 # ever shows up here.
@@ -1053,6 +1097,7 @@ run_line() {
     stop_server
     sentinel_before=$(sentinel_digest)
     sentinel_count_before=$(sentinel_count)
+    plant_legacy_configuration
     start_server
     authenticate admin "$ADMIN_PW"
     log_mark=$(wc -l < "$SERVER_LOG")
@@ -1061,6 +1106,28 @@ run_line() {
     restore "restore"
     require "the conflicting title is excluded, the rest restored" 4 "$(planned_writes)"
     require "and it says why it skipped the other one" 2 "$(reason_count current_state_conflict)"
+
+    # Deliberately after the count above rather than before it: the planted prefix
+    # is one no title sits beneath, so a run that still honoured it would have
+    # restored nothing and that assertion would already have failed. These three
+    # say the setting was cleared and reported, rather than merely not applied.
+    step "A scope setting from an older version is cleared, not honoured"
+    require "the legacy path prefix is gone from the saved configuration" 0 \
+        "$(grep -c '<string>' "$PLUGIN_CONFIG" || true)"
+    require "the media-file check is back on" "true" \
+        "$(sed -n 's|.*<RequirePathExists>\(.*\)</RequirePathExists>.*|\1|p' "$PLUGIN_CONFIG")"
+    require "and the run said what it found" 2 \
+        "$(grep -c 'since 1.0.0.8' "$SERVER_LOG" || true)"
+
+    step "The plan says what became of every write"
+    require "every write is recorded restored" 4 "$(outcome_count restored)"
+    require "none uncertain" 0 "$(outcome_count uncertain)"
+    require "none failed" 0 "$(outcome_count failed)"
+    require "none left unattempted" 0 "$(outcome_count not_attempted)"
+    require "each write carries its own outcome" 4 \
+        "$(jq -r '[.writes[] | select(.outcome == "restored")] | length' "$PLAN")"
+    require "and the closing fingerprint was taken" true \
+        "$(jq -r '.userDataTable.digestAfter != null' "$PLAN")"
 
     step "The data is back"
     verify_restored "movie / admin"    "$ADMIN_ID"  "$NEW_MOVIE_ID"   "$EXPECT_MOVIE_ADMIN"

@@ -55,6 +55,13 @@ library that was never broken proves nothing.
   all-or-nothing: not one of the other writes lands.
 - The apply restores each user's state on each title, field for field, matching
   what the server held before the move — not what the harness posted.
+- The plan says what became of each of those writes, and says `restored` for the
+  ones that are genuinely back. The unit tests can prove an outcome survives the
+  document; only a real server can prove the outcome is true.
+- A scope setting saved by 1.0.0.7, which no version since has a control for, is
+  cleared rather than obeyed. The planted prefix is one no title sits beneath, so
+  a run that still honoured it would restore nothing and fail the assertion
+  above — the setting cannot come back and hide behind a green line.
 - Every key the target item reports carries a row afterwards, so the next move
   finds the state too.
 - The stranded rows are still there, byte for byte, with the same digest and the
