@@ -628,7 +628,7 @@ public class RestoreUserDataTask : IScheduledTask
         var path = store.Write(plan);
         store.PruneToLatest(PlansKept);
 
-        _logger.LogInformation("{Summary}", AnalysisSummary.Render(result, plan.PlanId, path));
+        _logger.LogInformation("{Summary}", AnalysisSummary.Render(result, outcomes, plan.PlanId, path));
     }
 
     private void Report(AnalysisResult result, IReadOnlyList<WriteResult> outcomes, bool verbose)

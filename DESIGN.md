@@ -866,9 +866,16 @@ counts and item IDs, not every title, username, path, or state value.  The local
 JSON report may contain those details because an administrator explicitly needs
 them for review.
 
-Analysis with zero recoverable entries is a successful task with a clear "no
-writes available" result.  Apply with zero planned writes is refused because
-there is nothing to authorize.
+A run with zero recoverable entries is a successful task with a clear "nothing
+was restored" result.
+
+The summary is written in the past tense throughout, because by the time it is
+rendered the writes have been attempted.  It once ended by telling the operator
+to run an apply task — which had already been folded into this one, so it named
+something that did not exist and implied the restore was still pending at the
+moment it had just finished.  Restores are stated as a fraction of the writes
+planned, and every other outcome that occurred is named: "3 of 4" on its own
+invites the reader to assume the fourth is still coming.
 
 ---
 
