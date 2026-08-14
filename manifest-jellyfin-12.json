@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.18",
+        "changelog": "## What's Changed\n\n- docs(update): warn that an untouched install now has no scope (7214f2f)\n- chore(release): update the plugin catalogues for version 1.0.0.17 (9693205)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.17...1.0.0.18\n",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.18/RestoreUserDataAfterMove_1.0.0.18_jellyfin-12.0.0-rc5.zip",
+        "checksum": "94f37144548c4f90b978e5eb17bf42ba",
+        "timestamp": "2026-08-14T17:44:41Z"
+      },
+      {
         "version": "1.0.0.17",
         "changelog": "## What's Changed\n\n- fix(config): take the scheduled-task shim off the settings page (09a69cc)\n- fix(scope): make an empty library selection mean nothing, not everything (0eb86c8)\n- chore(release): update the plugin catalogues for version 1.0.0.16 (12dfe6e)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.16...1.0.0.17\n",
         "targetAbi": "12.0.0.0",
