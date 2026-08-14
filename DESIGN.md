@@ -359,6 +359,17 @@ indistinguishable from a correct empty result.  Both remain editable for the cas
 that motivated them: a library spanning two roots where only one is the
 destination.
 
+Defaulting is not the same as tolerating.  "Empty means every library" is a
+reading of an *absent* selection, and it must never be reached by way of a
+present one: a stored library list whose entries do not parse as IDs fails the
+run outright, rather than being reduced to nothing and then read as unconfigured.
+Dropping bad values and asking what is left cannot tell "nobody has chosen yet"
+from "the stored form of somebody's choice is corrupt", and collapsing the second
+into the first *widens* the scope of a mutating run on the strength of a value
+the plugin has just admitted it cannot read.  One bad entry condemns the whole
+selection: a partial read is still a guess at what was meant, and the only writer
+of this field is a page that posts IDs the server itself supplied.
+
 Whatever the scope resolves to is what the plan records, so an audit reads the
 same whether it was typed or derived.  Paths are compared using Jellyfin's
 host-platform path semantics.  Prefix tests must be path-component-aware;

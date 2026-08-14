@@ -141,6 +141,53 @@ public class ScopeTests
     }
 
     [Fact]
+    public void NoConfiguredLibrariesMeansEveryRecoverableLibrary()
+    {
+        Assert.Equal(LibrarySelectionKind.Defaulted, LibrarySelection.Parse(null).Kind);
+        Assert.Equal(LibrarySelectionKind.Defaulted, LibrarySelection.Parse([]).Kind);
+    }
+
+    [Fact]
+    public void ConfiguredLibrariesAreParsedAndDeduplicated()
+    {
+        var selection = LibrarySelection.Parse(
+            [Scenario.LibraryId.ToString("D"), Scenario.LibraryId.ToString("N"), Scenario.OtherLibraryId.ToString("D")]);
+
+        Assert.Equal(LibrarySelectionKind.Explicit, selection.Kind);
+        Assert.Equal([Scenario.LibraryId, Scenario.OtherLibraryId], selection.LibraryIds);
+    }
+
+    [Theory]
+    [InlineData("not-a-guid")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public void AnUnreadableSelectionIsNotAnAbsentOne(string value)
+    {
+        // The regression this exists for: parse, drop what failed, then ask
+        // whether anything is left. Nothing is, so the run reads it as "no
+        // libraries configured" and writes into every one of them — widening the
+        // scope of a mutating run on the strength of a value it could not read.
+        var selection = LibrarySelection.Parse([value]);
+
+        Assert.Equal(LibrarySelectionKind.Malformed, selection.Kind);
+        Assert.Empty(selection.LibraryIds);
+        Assert.Equal([value], selection.MalformedValues);
+    }
+
+    [Fact]
+    public void OneUnreadableValueCondemnsTheWholeSelection()
+    {
+        // A partial read is still a guess about which libraries were meant, and
+        // the only thing that writes this field posts IDs the server supplied.
+        var selection = LibrarySelection.Parse([Scenario.LibraryId.ToString("D"), "not-a-guid"]);
+
+        Assert.Equal(LibrarySelectionKind.Malformed, selection.Kind);
+        Assert.Empty(selection.LibraryIds);
+        Assert.Equal(["not-a-guid"], selection.MalformedValues);
+    }
+
+    [Fact]
     public void ItemsDroppedForAMissingFileAreCounted()
     {
         // Without this count, an unmounted share and an empty library produce the

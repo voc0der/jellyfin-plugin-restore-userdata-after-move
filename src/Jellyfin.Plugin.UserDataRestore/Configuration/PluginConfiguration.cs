@@ -20,7 +20,9 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     /// <remarks>
     /// Stored as strings because that is what the configuration page posts back.
-    /// Unparseable entries are dropped, not guessed at.
+    /// An unparseable entry fails the run rather than being dropped: dropping it
+    /// and then finding nothing left is indistinguishable from "not configured",
+    /// which means <em>every</em> library.
     /// </remarks>
     public string[] EligibleLibraryIds { get; set; } = [];
 

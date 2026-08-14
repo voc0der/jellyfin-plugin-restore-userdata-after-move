@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jellyfin.Plugin.UserDataRestore.Core.Analysis;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 
@@ -31,21 +32,37 @@ public sealed class LibraryScope(ILibraryManager libraryManager)
     /// </summary>
     /// <param name="configuredLibraryIds">The library IDs an operator selected, if any.</param>
     /// <returns>The libraries in scope and their locations.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// The stored selection is not readable, so no scope can be derived from it.
+    /// </exception>
     public ResolvedLibraryScope Resolve(IReadOnlyList<string>? configuredLibraryIds)
     {
         var folders = _libraryManager.GetVirtualFolders()
             .Where(folder => IsRecoverable(folder.CollectionType))
             .ToArray();
 
-        var selected = (configuredLibraryIds ?? [])
-            .Select(id => Guid.TryParse(id, out var parsed) ? parsed : Guid.Empty)
-            .Where(id => !id.Equals(Guid.Empty))
-            .ToHashSet();
+        var selection = LibrarySelection.Parse(configuredLibraryIds);
+
+        // A selection that cannot be read is not an absent selection. Treating it
+        // as one would answer "which libraries may this run write into?" with
+        // "all of them" on the strength of a value the plugin just failed to
+        // parse, which is the one direction a scope error must never go.
+        if (selection.Kind == LibrarySelectionKind.Malformed)
+        {
+            var offending = string.Join(", ", selection.MalformedValues.Select(value => "\"" + value + "\""));
+            throw new InvalidOperationException(
+                "The configured libraries cannot be read: " + offending + " "
+                + (selection.MalformedValues.Count == 1 ? "is not a library ID" : "are not library IDs") + ". "
+                + "Refusing to run rather than guess at the scope, because the alternative reading of an "
+                + "unreadable selection is \"every library\". Open the plugin's settings page, tick the "
+                + "libraries you want, and save.");
+        }
 
         // Nothing chosen means every library the plugin could ever recover into.
         // Fail-closed made sense while this was a required field; as a default it
         // only guarantees that the first run of a fresh install does nothing.
-        var defaulted = selected.Count == 0;
+        var defaulted = selection.Kind == LibrarySelectionKind.Defaulted;
+        var selected = selection.LibraryIds.ToHashSet();
         var inScope = folders
             .Where(folder => defaulted || (Guid.TryParse(folder.ItemId, out var id) && selected.Contains(id)))
             .ToArray();
