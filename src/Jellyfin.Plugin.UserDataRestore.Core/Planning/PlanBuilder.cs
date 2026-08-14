@@ -190,8 +190,12 @@ public static class PlanBuilder
             .Select(match => new PlanMatch
             {
                 ItemId = Format(match.ItemId),
-                Kind = match.Kind.ToString(),
-                Exclusion = match.Exclusion.ToString(),
+
+                // Both through their wire mappings, which exist precisely so a
+                // C# rename cannot move the plan schema underneath a reader — or
+                // change the canonical ID of a plan that means the same thing.
+                Kind = ItemKinds.ToWire(match.Kind),
+                Exclusion = ItemExclusions.ToWire(match.Exclusion),
                 Name = match.Name,
                 Path = match.Path,
             })
@@ -202,7 +206,7 @@ public static class PlanBuilder
     {
         UserId = Format(record.UserId),
         TargetItemId = Format(record.Target.ItemId),
-        TargetKind = record.Target.Kind.ToString(),
+        TargetKind = ItemKinds.ToWire(record.Target.Kind),
         TargetName = record.Target.Name,
         TargetPath = record.Target.Path,
         TargetLibraryIds = ToSet(record.Target.LibraryIds.Select(Format)),

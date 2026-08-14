@@ -16,6 +16,33 @@ public enum ItemKind
 }
 
 /// <summary>
+/// Wire names for <see cref="ItemKind"/>, spelled out for the same reason every
+/// other wire mapping here is: a rename in C# must not change the plan schema,
+/// and because array contents feed the canonical plan ID, it would change the
+/// hash of a plan whose meaning had not moved at all.
+/// </summary>
+public static class ItemKinds
+{
+    private static readonly Dictionary<ItemKind, string> Names = new()
+    {
+        [ItemKind.Other] = "other",
+        [ItemKind.Movie] = "movie",
+        [ItemKind.Episode] = "episode",
+    };
+
+    /// <summary>Gets every kind.</summary>
+    public static IReadOnlyList<ItemKind> All { get; } = [.. Names.Keys];
+
+    /// <summary>
+    /// Maps a kind to its stable wire name.
+    /// </summary>
+    /// <param name="kind">The kind to map.</param>
+    /// <returns>The snake_case name used in plans and logs.</returns>
+    public static string ToWire(ItemKind kind) =>
+        Names.TryGetValue(kind, out var name) ? name : throw new ArgumentOutOfRangeException(nameof(kind));
+}
+
+/// <summary>
 /// A current Jellyfin item, as seen by the analyzer.
 /// </summary>
 /// <remarks>

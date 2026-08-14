@@ -297,6 +297,62 @@ public class PlanTests
     }
 
     [Fact]
+    public void EveryExclusionHasAPinnedWireName()
+    {
+        // Pinned by value, not by round-trip: a test that asserts ToWire agrees
+        // with itself would pass through the rename these names exist to survive.
+        Assert.Equal("eligible", ItemExclusions.ToWire(ItemExclusion.None));
+        Assert.Equal("unsupported_type", ItemExclusions.ToWire(ItemExclusion.UnsupportedType));
+        Assert.Equal("virtual_or_extra", ItemExclusions.ToWire(ItemExclusion.VirtualOrExtra));
+        Assert.Equal("missing_media_file", ItemExclusions.ToWire(ItemExclusion.MissingPath));
+        Assert.Equal("library_not_configured", ItemExclusions.ToWire(ItemExclusion.LibraryNotConfigured));
+        Assert.Equal("path_outside_final_scope", ItemExclusions.ToWire(ItemExclusion.PathOutsideFinalScope));
+
+        Assert.Equal("other", ItemKinds.ToWire(ItemKind.Other));
+        Assert.Equal("movie", ItemKinds.ToWire(ItemKind.Movie));
+        Assert.Equal("episode", ItemKinds.ToWire(ItemKind.Episode));
+    }
+
+    [Theory]
+    [InlineData(ItemExclusion.LibraryNotConfigured, "library_not_configured")]
+    [InlineData(ItemExclusion.PathOutsideFinalScope, "path_outside_final_scope")]
+    [InlineData(ItemExclusion.MissingPath, "missing_media_file")]
+    [InlineData(ItemExclusion.VirtualOrExtra, "virtual_or_extra")]
+    public void AnExcludedMatchIsNamedInTheWireVocabulary(ItemExclusion exclusion, string expected)
+    {
+        // The regression this exists for: the field was rendered with
+        // Exclusion.ToString(), so the plan carried "LibraryNotConfigured" while
+        // every other classification in the document was snake_case.
+        var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")], target: ExcludedMovie(exclusion));
+
+        var match = Assert.Single(Assert.Single(plan.SourceRows).Matches);
+        Assert.Equal(expected, match.Exclusion);
+        Assert.Equal("movie", match.Kind);
+    }
+
+    [Fact]
+    public void AnEligibleMatchAndItsCandidateAreNamedTheSameWay()
+    {
+        var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")]);
+
+        Assert.Equal("eligible", Assert.Single(Assert.Single(plan.SourceRows).Matches).Exclusion);
+        Assert.Equal("movie", Assert.Single(plan.Candidates).TargetKind);
+    }
+
+    /// <summary>A movie the eligibility rule rejects for exactly one reason.</summary>
+    private static CurrentItemSnapshot ExcludedMovie(ItemExclusion exclusion) => exclusion switch
+    {
+        ItemExclusion.LibraryNotConfigured => Scenario.Movie(MovieId, libraryId: Scenario.OtherLibraryId),
+        ItemExclusion.PathOutsideFinalScope => Scenario.Movie(MovieId, path: "/mnt/staging/Test Movie (2020).mkv"),
+        // No path at all, rather than a path that does not exist: the latter is
+        // only an exclusion when RequirePathExists is on, which these options
+        // leave off, and the point here is the name not the rule.
+        ItemExclusion.MissingPath => Scenario.Movie(MovieId) with { Path = null },
+        ItemExclusion.VirtualOrExtra => Scenario.Movie(MovieId) with { IsVirtualItem = true },
+        _ => throw new ArgumentOutOfRangeException(nameof(exclusion)),
+    };
+
+    [Fact]
     public void EveryWriteRecordsWhatBecameOfIt()
     {
         var plan = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")]);
