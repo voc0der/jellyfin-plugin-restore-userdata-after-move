@@ -107,9 +107,10 @@ public class RestoreUserDataTask : IScheduledTask
     /// maintenance window, and a wrong guess runs mid-move, where every stranded
     /// row honestly reports as unmatchable.
     ///
-    /// So it ships inert. Add a trigger in Dashboard -> Scheduled Tasks timed to
-    /// land after your own pipeline, or press Run now. Repeat runs are no-ops by
-    /// construction, so an over-frequent trigger costs nothing but log lines.
+    /// So it ships inert. Add a trigger here in Dashboard -> Scheduled Tasks,
+    /// timed to land after your own pipeline, and run it from here too. Repeat
+    /// runs are no-ops by construction, so an over-frequent trigger costs nothing
+    /// but log lines.
     /// </remarks>
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 
@@ -145,15 +146,12 @@ public class RestoreUserDataTask : IScheduledTask
         if (!options.IsScopeConfigured)
         {
             throw new InvalidOperationException(
-                scope.LibraryIds.Count == 0
-                    ? "No movie or TV libraries were found on this server, so there is nothing this plugin can recover into."
-                    : "The selected libraries have no configured folders, so no recovery target can be identified.");
+                "The selected libraries have no configured folders, so no recovery target can be identified.");
         }
 
         _logger.LogInformation(
-            "Scope: {LibraryCount} {Source} libraries, {PrefixCount} folders ({Prefixes}).",
+            "Scope: {LibraryCount} selected libraries, {PrefixCount} folders ({Prefixes}).",
             scope.LibraryIds.Count,
-            scope.Defaulted ? "auto-detected" : "selected",
             options.FinalPathPrefixes.Count,
             string.Join(", ", options.FinalPathPrefixes));
 

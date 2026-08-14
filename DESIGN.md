@@ -347,9 +347,9 @@ enforcement observed during the same probe.
 
 ### 6.1 Persistent configuration
 
-- Eligible Jellyfin library IDs.  **Empty means every movie and TV library**, and
-  no other kind is ever offered or defaulted to: nothing in a music, photo, or
-  book library can hold a recovery target.
+- Eligible Jellyfin library IDs.  **Empty means nothing is in scope and the run
+  refuses**, and no kind but movies and TV is ever offered: nothing in a music,
+  photo, or book library can hold a recovery target.
 - Final path prefixes.  **Always the in-scope libraries' own configured
   locations**, read from the server.
 - Whether items whose media file is missing are skipped.  Always on.
@@ -370,16 +370,28 @@ the log what it found and what will change as a result.  The values are the
 operator's own past choice and the reason their results are about to differ, so
 they are named rather than silently reset.
 
-Defaulting is not the same as tolerating.  "Empty means every library" is a
-reading of an *absent* selection, and it must never be reached by way of a
-present one: a stored library list whose entries do not parse as IDs fails the
-run outright, rather than being reduced to nothing and then read as unconfigured.
-Dropping bad values and asking what is left cannot tell "nobody has chosen yet"
-from "the stored form of somebody's choice is corrupt", and collapsing the second
-into the first *widens* the scope of a mutating run on the strength of a value
-the plugin has just admitted it cannot read.  One bad entry condemns the whole
-selection: a partial read is still a guess at what was meant, and the only writer
-of this field is a page that posts IDs the server itself supplied.
+The library list has no default, and that is the correction 1.0.0.16 makes.
+Through 1.0.0.15 an empty selection was read as *every* movie and TV library, on
+the reasoning that a fresh install should do something rather than nothing.  What
+it actually built was a page whose default state, and whose only gesture for
+"narrow this to nothing", both resolved to the widest write scope available —
+with no way to express the empty selection at all, because unticking every box
+posts exactly what an untouched install stores.  A task that writes to user data
+does not get to infer consent from an absent answer.  Empty now means empty: the
+run refuses, and says which page to go tick something on.
+
+That refusal is the *only* reading of an empty selection, and it must never be
+reached by way of an unreadable one: a stored library list whose entries do not
+parse as IDs fails the run with its own message, rather than being reduced to
+nothing and reported as a clean no-op.  Dropping bad values and asking what is
+left cannot tell "nobody has ticked a library" from "the stored form of
+somebody's choice is corrupt", and collapsing the second into the first produces
+this codebase's standing failure mode — an empty result indistinguishable from a
+correct one, this time against a settings page still showing ticked boxes.  One
+bad entry condemns the whole selection: a partial read is still a guess at what
+was meant, and the only writer of this field is a page that posts IDs the server
+itself supplied.  Selected libraries that no longer exist on the server are the
+same case and get the same treatment.
 
 Whatever the scope resolves to is what the plan records, so an audit reads the
 same whether it was typed or derived.  Paths are compared using Jellyfin's
@@ -396,9 +408,9 @@ apply task in Milestone 3.
 1. Finish the stable-tree cutover and complete the final Jellyfin scan.
 2. Confirm playback works from the final paths.
 3. Install the plugin build matching the exact server version.
-4. Narrow the scope on the plugin page, if and only if the defaults are wrong.
-5. Run **Analyze detached user data**, from the plugin page or from Scheduled
-   Tasks.
+4. Tick the libraries to recover on the plugin page and save.  Nothing is ticked
+   until you do, and nothing ticked means nothing runs.
+5. Run **Analyze detached user data** from Scheduled Tasks.
 6. Review the summary and JSON plan, especially ambiguity and conflict counts.
 7. Take a current Jellyfin full-system backup.
 8. Enter the displayed confirmation phrase, containing the plan ID and write
@@ -412,9 +424,10 @@ apply task in Milestone 3.
 
 ### 6.3 Arming — REMOVED, NOT IMPLEMENTED
 
-> No arming ceremony exists.  The configuration page has library checkboxes, a
-> Save button, and a Run now button; there is no phrase to type, no expiry, and
-> no backup acknowledgement.
+> No arming ceremony exists.  The configuration page has library checkboxes and
+> a Save button; there is no phrase to type, no expiry, and no backup
+> acknowledgement.  Starting the task belongs to Scheduled Tasks, which is where
+> a scheduled task is started and where its results already appear.
 >
 > It was defending against an administrator adding a schedule to the apply task
 > and turning a one-time recovery into something that repeats writes forever.

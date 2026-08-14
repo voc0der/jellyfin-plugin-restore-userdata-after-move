@@ -16,13 +16,14 @@ public class PluginConfiguration : BasePluginConfiguration
 {
     /// <summary>
     /// Gets or sets the libraries whose items may receive recovered state. Empty
-    /// means every movie and TV library on the server.
+    /// means nothing is in scope and the task refuses to run.
     /// </summary>
     /// <remarks>
     /// Stored as strings because that is what the configuration page posts back.
     /// An unparseable entry fails the run rather than being dropped: dropping it
-    /// and then finding nothing left is indistinguishable from "not configured",
-    /// which means <em>every</em> library.
+    /// and then finding nothing left is indistinguishable from "nothing ticked",
+    /// and a run that quietly does nothing because it could not read its own
+    /// scope looks exactly like one that found nothing to recover.
     /// </remarks>
     public string[] EligibleLibraryIds { get; set; } = [];
 

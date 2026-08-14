@@ -141,10 +141,14 @@ public class ScopeTests
     }
 
     [Fact]
-    public void NoConfiguredLibrariesMeansEveryRecoverableLibrary()
+    public void NoTickedLibrariesMeansNothingIsInScope()
     {
-        Assert.Equal(LibrarySelectionKind.Defaulted, LibrarySelection.Parse(null).Kind);
-        Assert.Equal(LibrarySelectionKind.Defaulted, LibrarySelection.Parse([]).Kind);
+        // Not "every library". An empty selection is the answer the page's own
+        // default state posts, and reading it as the widest possible scope made
+        // unticking everything the way to write into everything.
+        Assert.Equal(LibrarySelectionKind.None, LibrarySelection.Parse(null).Kind);
+        Assert.Equal(LibrarySelectionKind.None, LibrarySelection.Parse([]).Kind);
+        Assert.Empty(LibrarySelection.Parse([]).LibraryIds);
     }
 
     [Fact]
@@ -165,9 +169,9 @@ public class ScopeTests
     public void AnUnreadableSelectionIsNotAnAbsentOne(string value)
     {
         // The regression this exists for: parse, drop what failed, then ask
-        // whether anything is left. Nothing is, so the run reads it as "no
-        // libraries configured" and writes into every one of them — widening the
-        // scope of a mutating run on the strength of a value it could not read.
+        // whether anything is left. Nothing is, so the run reads it as "nothing
+        // ticked" and reports a clean no-op against a page still showing ticked
+        // boxes — the failure this codebase keeps having to fix.
         var selection = LibrarySelection.Parse([value]);
 
         Assert.Equal(LibrarySelectionKind.Malformed, selection.Kind);

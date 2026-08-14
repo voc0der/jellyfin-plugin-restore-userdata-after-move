@@ -3,8 +3,8 @@ namespace Jellyfin.Plugin.UserDataRestore.Core.Analysis;
 /// <summary>What the persisted library selection turned out to be.</summary>
 public enum LibrarySelectionKind
 {
-    /// <summary>Nothing was configured, so every recoverable library is in scope.</summary>
-    Defaulted,
+    /// <summary>Nothing was selected, so nothing is in scope.</summary>
+    None,
 
     /// <summary>An operator chose these libraries.</summary>
     Explicit,
@@ -31,13 +31,17 @@ public readonly record struct LibrarySelection(
     /// <param name="configured">The stored values, as the configuration page posts them.</param>
     /// <returns>The selection, or the reason it cannot be read.</returns>
     /// <remarks>
-    /// The distinction this draws is the whole point. Dropping unparseable values
-    /// and then asking whether anything is left cannot tell "nobody has chosen
-    /// libraries yet" — which correctly means all of them — from "somebody chose
-    /// libraries and the stored form of that choice is corrupt", which means
-    /// nothing safe at all. Collapsing the second into the first *widens* the
-    /// scope of a run that writes to user data, on the strength of a value the
-    /// plugin just admitted it could not read.
+    /// Nothing selected means nothing in scope. This plugin writes to user data,
+    /// so the only scope it will ever act on is one somebody ticked; an empty
+    /// selection is an answer, not a gap to be filled in.
+    ///
+    /// The distinction this draws is between that empty answer and no readable
+    /// answer at all. Dropping unparseable values and then asking whether
+    /// anything is left cannot tell "nobody has ticked a library" — which
+    /// correctly means no run — from "somebody ticked libraries and the stored
+    /// form of that choice is corrupt", which means the run would silently do
+    /// nothing while the page still shows a scope. That is this codebase's other
+    /// standing failure: an empty result indistinguishable from a correct one.
     ///
     /// So one bad entry condemns the whole selection rather than being quietly
     /// skipped. A partial read is still a guess about which libraries were meant,
@@ -49,7 +53,7 @@ public readonly record struct LibrarySelection(
     {
         if (configured is null || configured.Count == 0)
         {
-            return new LibrarySelection(LibrarySelectionKind.Defaulted, [], []);
+            return new LibrarySelection(LibrarySelectionKind.None, [], []);
         }
 
         var ids = new List<Guid>(configured.Count);

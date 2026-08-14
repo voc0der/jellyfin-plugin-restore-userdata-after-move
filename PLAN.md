@@ -144,13 +144,17 @@ Refinements made while building, none of which loosen §7:
   it, and widening the sufficient set is a design change. The plan counts how many
   candidates it would have unblocked, so the question can be settled with data
   rather than reopened on instinct.
-- **Nothing is required on the configuration page.** No libraries selected means
-  every movie and TV library; no folders typed means those libraries' own
-  locations, read from the server (DESIGN §6.1). Requiring both guaranteed that a
-  fresh install's first run failed, and the path field asked an operator to retype
-  what the server already knew, in a form whose failure — a host path where the
-  server sees a container path — excluded every item and reported "nothing
-  recoverable". Whatever the scope resolves to is what the plan records.
+- **The configuration page asks for one thing, and it is not optional.** Ticking
+  libraries is the whole page; nothing ticked means nothing in scope and a run
+  that refuses (DESIGN §6.1). Through 1.0.0.15 an empty selection meant *every*
+  movie and TV library, which left the page's default state and its only gesture
+  for "narrow this to nothing" both resolving to the widest write scope there is.
+  Folders are not asked for at all: they are the ticked libraries' own locations,
+  read from the server, because the field that once asked for them wanted an
+  operator to retype what the server already knew, in a form whose failure — a
+  host path where the server sees a container path — excluded every item and
+  reported "nothing recoverable". Whatever the scope resolves to is what the plan
+  records.
 - **Item queries must hydrate provider IDs.** Without `ItemFields.ProviderIds`
   every item reports only its own GUID and the whole plugin quietly finds nothing.
   The plan carries `eligibleTargetsWithProviderKeys` and the task warns on the
