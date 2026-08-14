@@ -678,9 +678,34 @@ prefixes—are also deduplicated there: a hash counts an array's length as much 
 its order, so a host that reports the same key twice must not be able to give the
 same analysis two identities.
 
+### 8.1 The run ledger
+
+The plan is the better artifact and the ledger is the one that survives.
+
+A plan is composed after the last write and published in a single operation, so
+everything that can go wrong between the first save and that moment — a full
+disk, a revoked permission, a process killed mid-run — takes the entire record of
+the run with it, and user data has already changed by then.  Aggregate counts in
+a log are not a substitute: they cannot say *which* `(user, item)` pairs were
+touched, which is the only question worth asking after a crash.
+
+So the same account is written the other way round.  One JSON object per line,
+appended and flushed to disk as each write is decided and before the next is
+attempted, covering every planned write including the ones an abandoned run
+never reached.  Each line carries the time, the user, the item, the outcome, and
+its detail — and nothing else.  No classification, no diagnostics, no
+fingerprints, no hash over the whole: nothing that has to be correct before the
+file is worth reading.  A ledger truncated by a power cut is a ledger missing its
+last line, which is exactly the property the plan does not have.
+
+A ledger that cannot be opened, or a line that cannot be appended, is logged and
+the run continues.  It is a second record, not a precondition for restoring
+anything, and refusing to work without it would trade a real recovery for a
+bookkeeping failure.
+
 Plans and run ledgers are audit artifacts, not a standing identity database.
-Keep a bounded number—for example, the latest five plans and twenty run ledgers—
-and never delete the currently armed plan.
+Keep a bounded number—the latest five plans and twenty run ledgers—and never
+delete the currently armed plan.
 
 ---
 
@@ -770,7 +795,8 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
 9. Re-read through `IUserDataManager` and verify the six semantic fields.
 10. Query the current item's rows and verify that Jellyfin wrote the expected
     current keys with the recovered state.
-11. Append and flush a completed ledger record.
+11. Append and flush the ledger record for this write, before the next write is
+    attempted (§8.1).
 12. Report progress.
 
 Using the partial-update DTO preserves current audio/subtitle selections.  V1
@@ -801,6 +827,9 @@ values make retries idempotent.
   silently do neither.
 - A ledger failure after a successful save does not roll the user state back.
   The next analysis detects semantic equality and reports `already_applied`.
+- A plan that cannot be written is reported as a failed task, but it is no longer
+  the loss of the run's record: the ledger (§8.1) already holds a line per write,
+  flushed as each one was decided.
 - There is deliberately no transaction spanning multiple titles or users.
 - Detached rows remain exactly as they were before the run.
 

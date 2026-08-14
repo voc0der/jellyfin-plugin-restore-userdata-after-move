@@ -23,7 +23,7 @@ public class ApplySequenceTests
 
         Assert.Equal([0, 1, 2], run.Attempted);
         Assert.All(run.Results, result => Assert.Equal(WriteOutcome.Restored, result.Outcome));
-        Assert.Equal([1, 2, 3], run.Progress);
+        Assert.Equal(run.Results, run.Recorded);
     }
 
     [Fact]
@@ -180,6 +180,52 @@ public class ApplySequenceTests
     }
 
     [Fact]
+    public async Task EveryResultIsReportedAsItIsDecided()
+    {
+        // What the run ledger is built on. A callback that only fired for
+        // attempted writes, or only after the loop, would leave the abandoned
+        // ones out of the durable record and put the whole record after the last
+        // mutation - which is the position the plan is already in, and the reason
+        // it is not enough on its own.
+        var run = await RunAsync(4, index => index == 1 ? WriteOutcome.Uncertain : WriteOutcome.Restored);
+
+        Assert.Equal(run.Results, run.Recorded);
+        Assert.Equal(4, run.Recorded.Count);
+    }
+
+    [Fact]
+    public async Task AResultIsRecordedBeforeTheNextWriteIsAttempted()
+    {
+        // Ordering, not just coverage: a line flushed after the following write
+        // has already landed describes a database state that has moved on.
+        var order = new List<string>();
+        var writes = Enumerable.Range(0, 3).Select(Write).ToArray();
+
+        await ApplySequence.RunAsync(
+            writes,
+            (write, _) =>
+            {
+                order.Add("attempt");
+                return Task.FromResult(new WriteResult(write, WriteOutcome.Restored, null));
+            },
+            () => false,
+            _ => order.Add("record"),
+            CancellationToken.None);
+
+        Assert.Equal(["attempt", "record", "attempt", "record", "attempt", "record"], order);
+    }
+
+    [Fact]
+    public async Task AbandonedWritesAreRecordedToo()
+    {
+        var run = await RunAsync(3, index => index == 0 ? WriteOutcome.Failed : WriteOutcome.Restored);
+
+        Assert.Equal(
+            [WriteOutcome.Failed, WriteOutcome.NotAttempted, WriteOutcome.NotAttempted],
+            run.Recorded.Select(result => result.Outcome));
+    }
+
+    [Fact]
     public async Task ARunThatFinishedWasNotCancelled()
     {
         var run = await RunAsync(2, _ => WriteOutcome.Restored);
@@ -203,21 +249,24 @@ public class ApplySequenceTests
     {
         var writes = Enumerable.Range(0, count).Select(Write).ToArray();
         var attempted = new List<int>();
-        var progress = new List<int>();
+        var recorded = new List<WriteResult>();
 
         var results = await ApplySequence.RunAsync(
             writes,
             (write, _) =>
             {
                 var index = Array.IndexOf(writes, write);
+
+                // Recorded-before-attempted is the property the ledger depends
+                // on, so the fake captures the ordering rather than assuming it.
                 attempted.Add(index);
                 return Task.FromResult(new WriteResult(write, outcomeAt(index), null));
             },
             libraryScanIsRunning ?? (() => false),
-            progress.Add,
+            recorded.Add,
             cancellationToken);
 
-        return new SequenceRun(writes, results, attempted, progress);
+        return new SequenceRun(writes, results, attempted, recorded);
     }
 
     private static PlannedWrite Write(int index) => new()
@@ -234,5 +283,5 @@ public class ApplySequenceTests
         IReadOnlyList<PlannedWrite> Writes,
         IReadOnlyList<WriteResult> Results,
         IReadOnlyList<int> Attempted,
-        IReadOnlyList<int> Progress);
+        IReadOnlyList<WriteResult> Recorded);
 }

@@ -45,6 +45,10 @@ public class RestoreUserDataTask : IScheduledTask
     // the last good one. Nobody opening a plugin page has an opinion about it.
     private const int PlansKept = 5;
 
+    // Ledgers are smaller still - a line per write - and are the thing you go
+    // looking for when a plan is missing, so more of them are kept (DESIGN §8).
+    private const int LedgersKept = 20;
+
     private readonly IDbContextFactory<JellyfinDbContext> _dbFactory;
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
@@ -162,7 +166,7 @@ public class RestoreUserDataTask : IScheduledTask
         var result = await AnalyzeAsync(options, reader, cancellationToken).ConfigureAwait(false);
         progress.Report(50);
 
-        var outcomes = await ApplyAsync(result.Writes, options, reader, progress, cancellationToken).ConfigureAwait(false);
+        var outcomes = await ApplyAsync(plugin, result.Writes, options, reader, progress, cancellationToken).ConfigureAwait(false);
         progress.Report(95);
 
         // Everything from here describes writes that have already landed, so none
@@ -215,7 +219,7 @@ public class RestoreUserDataTask : IScheduledTask
             throw new InvalidOperationException(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"The restores completed ({CountOf(outcomes, WriteOutcome.Restored)} restored, {CountOf(outcomes, WriteOutcome.Skipped)} skipped) but the plan for this run could not be written. What happened is in the log above; the artifact is missing."),
+                    $"The restores completed ({CountOf(outcomes, WriteOutcome.Restored)} restored, {CountOf(outcomes, WriteOutcome.Skipped)} skipped) but the plan for this run could not be written. The run ledger in the plans directory still records every write and its outcome; what is missing is the classification detail around them."),
                 planFailure);
         }
     }
@@ -324,6 +328,7 @@ public class RestoreUserDataTask : IScheduledTask
     /// abandoned would read as though they had never been planned.
     /// </remarks>
     private async Task<IReadOnlyList<WriteResult>> ApplyAsync(
+        Plugin plugin,
         IReadOnlyList<PlannedWrite> writes,
         AnalysisOptions options,
         UserDataReader reader,
@@ -346,6 +351,13 @@ public class RestoreUserDataTask : IScheduledTask
         // against is read from the live item inside the loop.
         var ownership = collector.BuildKeyOwnership(cancellationToken);
 
+        // Opened before the first write and flushed after each one, so the record
+        // of a run exists while the run is still capable of failing. The plan is
+        // the better artifact and this is the one that survives the plan not
+        // being written at all.
+        using var ledger = OpenLedger(plugin);
+        var completed = 0;
+
         // Safety invariant 8 lives in ApplySequence, where it can be tested by
         // injecting a failure rather than by arranging for a real server to
         // produce one. All this supplies is the write itself.
@@ -353,11 +365,71 @@ public class RestoreUserDataTask : IScheduledTask
             writes,
             (write, token) => ApplyAsync(writer, reader, collector, write, options, ownership, token),
             LibraryScanIsRunning,
-            done => progress.Report(50 + (45.0 * done / writes.Count)),
+            result =>
+            {
+                Record(ledger, result);
+                progress.Report(50 + (45.0 * ++completed / writes.Count));
+            },
             cancellationToken).ConfigureAwait(false);
 
         ReportAbandoned(results);
         return results;
+    }
+
+    /// <summary>
+    /// Opens this run's ledger, or returns null if it cannot be opened.
+    /// </summary>
+    /// <remarks>
+    /// A ledger that will not open is a reason to say so, not a reason to refuse
+    /// to restore anything: the plan is still coming, and the run is no worse off
+    /// than every version before this one.
+    /// </remarks>
+    private RunLedger? OpenLedger(Plugin plugin)
+    {
+        try
+        {
+            var ledger = RunLedger.Open(plugin.PlanDirectory, DateTimeOffset.UtcNow);
+            RunLedger.PruneToLatest(plugin.PlanDirectory, LedgersKept);
+            return ledger;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(
+                ex,
+                "Could not open a run ledger, so this run's only record will be the plan written at the end. "
+                + "If that fails too, the log below is all there is.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Appends one outcome to the ledger, never letting it disturb the run.
+    /// </summary>
+    /// <remarks>
+    /// Logged once per failure rather than swallowed, but it cannot throw: this
+    /// runs between two writes to user data, and an exception here would abandon
+    /// the batch over a bookkeeping problem.
+    /// </remarks>
+    private void Record(RunLedger? ledger, WriteResult result)
+    {
+        if (ledger is null)
+        {
+            return;
+        }
+
+        try
+        {
+            ledger.Append(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(
+                ex,
+                "Could not record user {UserId} item {ItemId} ({Outcome}) in this run's ledger.",
+                result.Write.UserId,
+                result.Write.ItemId,
+                WriteOutcomes.ToWire(result.Outcome));
+        }
     }
 
     /// <summary>
@@ -596,7 +668,8 @@ public class RestoreUserDataTask : IScheduledTask
         {
             _logger.LogError(
                 ex,
-                "The plan for this run could not be written. The restores below already happened; this is the record of them that is missing.");
+                "The plan for this run could not be written. The restores below already happened; the run ledger beside it records which pairs were touched, "
+                + "and what is missing is the classification detail around them.");
             return ex;
         }
     }

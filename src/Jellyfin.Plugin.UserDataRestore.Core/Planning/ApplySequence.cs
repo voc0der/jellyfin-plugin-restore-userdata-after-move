@@ -49,7 +49,12 @@ public static class ApplySequence
     /// <param name="writes">The planned writes, in the order the analysis produced them.</param>
     /// <param name="attemptAsync">Performs one write and reports what became of it.</param>
     /// <param name="libraryScanIsRunning">Whether the library is mid-rebuild right now.</param>
-    /// <param name="completed">Called with the number of writes disposed of so far.</param>
+    /// <param name="recorded">
+    /// Called with every result the moment it is decided, abandoned writes
+    /// included, and before the next write is attempted. This is where a durable
+    /// per-write record is made, so it runs while the run can still be
+    /// interrupted rather than after it has finished.
+    /// </param>
     /// <param name="cancellationToken">The run's cancellation token.</param>
     /// <returns>One result per planned write, in the planned order.</returns>
     /// <remarks>
@@ -65,13 +70,13 @@ public static class ApplySequence
         IReadOnlyList<PlannedWrite> writes,
         Func<PlannedWrite, CancellationToken, Task<WriteResult>> attemptAsync,
         Func<bool> libraryScanIsRunning,
-        Action<int> completed,
+        Action<WriteResult> recorded,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(writes);
         ArgumentNullException.ThrowIfNull(attemptAsync);
         ArgumentNullException.ThrowIfNull(libraryScanIsRunning);
-        ArgumentNullException.ThrowIfNull(completed);
+        ArgumentNullException.ThrowIfNull(recorded);
 
         var results = new List<WriteResult>(writes.Count);
 
@@ -84,7 +89,7 @@ public static class ApplySequence
             // saying what changed it. The caller rethrows once that record exists.
             if (cancellationToken.IsCancellationRequested)
             {
-                Abandon(results, writes, index, Cancelled);
+                Abandon(results, writes, index, Cancelled, recorded);
                 break;
             }
 
@@ -94,7 +99,7 @@ public static class ApplySequence
             // than revalidated against a moving library.
             if (libraryScanIsRunning())
             {
-                Abandon(results, writes, index, LibraryScanStarted);
+                Abandon(results, writes, index, LibraryScanStarted, recorded);
                 break;
             }
 
@@ -109,16 +114,16 @@ public static class ApplySequence
                 // the save take the token, so this write is untouched too; an
                 // attempt that had reached the save reports Uncertain rather than
                 // throwing.
-                Abandon(results, writes, index, Cancelled);
+                Abandon(results, writes, index, Cancelled, recorded);
                 break;
             }
 
             results.Add(result);
-            completed(index + 1);
+            recorded(result);
 
             if (result.Outcome is WriteOutcome.Failed or WriteOutcome.Uncertain)
             {
-                Abandon(results, writes, index + 1, StoppedAfter + WriteOutcomes.ToWire(result.Outcome));
+                Abandon(results, writes, index + 1, StoppedAfter + WriteOutcomes.ToWire(result.Outcome), recorded);
                 break;
             }
         }
@@ -138,11 +143,14 @@ public static class ApplySequence
         List<WriteResult> results,
         IReadOnlyList<PlannedWrite> writes,
         int from,
-        string reason)
+        string reason,
+        Action<WriteResult> recorded)
     {
         for (var index = from; index < writes.Count; index++)
         {
-            results.Add(WriteResult.NotAttempted(writes[index], reason));
+            var result = WriteResult.NotAttempted(writes[index], reason);
+            results.Add(result);
+            recorded(result);
         }
     }
 }

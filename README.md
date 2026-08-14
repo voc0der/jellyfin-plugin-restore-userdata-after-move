@@ -180,6 +180,13 @@ fewer than all of them. There is nothing else on it.
 Results appear in the task's summary and the server log; the full detail is in a
 plan file under `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
 
+Beside each plan is a `run-*.jsonl` ledger — one line per write, appended and
+flushed as the run made it. The plan is the better artifact and the ledger is the
+one that survives: a plan is composed after the last write, so a crash or a full
+disk between the first restore and the end of the run takes it with it. If you
+ever need to know which items a run touched and the plan is missing, that is the
+file.
+
 It is at its best running behind whatever moves your files, the morning after.
 Running it *during* a migration is harmless but unproductive: the old items still
 linger alongside the new ones, which honestly reports as ambiguous — the right
