@@ -133,6 +133,8 @@ public class RestoreUserDataTask : IScheduledTask
         var plugin = Plugin.Instance
             ?? throw new InvalidOperationException("The plugin instance is not available.");
         var configuration = plugin.Configuration;
+        ClearLegacyScopeOverrides(plugin, configuration);
+
         var scope = new LibraryScope(_libraryManager).Resolve(configuration.EligibleLibraryIds);
         var options = BuildOptions(configuration, scope);
 
@@ -206,12 +208,56 @@ public class RestoreUserDataTask : IScheduledTask
             string.Equals(worker.ScheduledTask.Key, "RefreshLibrary", StringComparison.Ordinal)
             && worker.State == TaskState.Running);
 
+    /// <summary>
+    /// Clears path settings an upgraded install may still carry from a version
+    /// that had controls for them.
+    /// </summary>
+    /// <remarks>
+    /// This runs before the scope is resolved, so a legacy value cannot reach a
+    /// single write. Both settings decide which items a run may write to, and
+    /// neither has been editable since 1.0.0.8 — a prefix list narrower than the
+    /// library's own locations silently excludes valid targets, and a cleared
+    /// path-existence flag admits items whose file is gone, which re-strands the
+    /// data onto an item the next scan removes. The operator is told what was
+    /// found rather than only that something was reset: it is the setting they
+    /// once chose, and the reason their results are about to change.
+    /// </remarks>
+    private void ClearLegacyScopeOverrides(Plugin plugin, PluginConfiguration configuration)
+    {
+        if (!configuration.HasLegacyScopeOverrides)
+        {
+            return;
+        }
+
+        if (configuration.FinalPathPrefixes.Length > 0)
+        {
+            _logger.LogWarning(
+                "Clearing {Count} final path prefix(es) saved by an older version ({Prefixes}). "
+                + "The plugin has had no control for them since 1.0.0.8, and scope now comes from the selected libraries' own locations.",
+                configuration.FinalPathPrefixes.Length,
+                string.Join(", ", configuration.FinalPathPrefixes));
+        }
+
+        if (!configuration.RequirePathExists)
+        {
+            _logger.LogWarning(
+                "Re-enabling the media-file check, which an older version had saved as off. "
+                + "The plugin has had no control for it since 1.0.0.8, and recovering onto an item whose file is missing re-strands the data.");
+        }
+
+        configuration.FinalPathPrefixes = [];
+        configuration.RequirePathExists = true;
+        plugin.UpdateConfiguration(configuration);
+    }
+
     private static AnalysisOptions BuildOptions(PluginConfiguration configuration, ResolvedLibraryScope scope) => new()
     {
         EligibleLibraryIds = scope.LibraryIds,
 
-        // Typed prefixes win; otherwise the libraries' own locations, which the
-        // server already knows and a human cannot mistype.
+        // The libraries' own locations, which the server already knows and a human
+        // cannot mistype. The configured list is read rather than assumed empty,
+        // but ClearLegacyScopeOverrides has already guaranteed that it is: nothing
+        // has offered a control for it since 1.0.0.8.
         FinalPathPrefixes = ScopeDefaults.ResolvePrefixes(configuration.FinalPathPrefixes, scope.Locations),
 
         // Jellyfin runs on the host's own filesystem semantics; comparing paths

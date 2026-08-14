@@ -346,18 +346,25 @@ enforcement observed during the same probe.
 - Eligible Jellyfin library IDs.  **Empty means every movie and TV library**, and
   no other kind is ever offered or defaulted to: nothing in a music, photo, or
   book library can hold a recovery target.
-- Final path prefixes.  **Empty means the in-scope libraries' own configured
+- Final path prefixes.  **Always the in-scope libraries' own configured
   locations**, read from the server.
-- Whether items whose media file is missing are skipped.  On by default.
+- Whether items whose media file is missing are skipped.  Always on.
 
-Both scope fields default rather than being required.  Requiring them guaranteed
-that the first run of a fresh install failed, and the path field asked the
-operator to retype something the server already knows — in a form that is easy to
-get wrong and whose failure is silent.  A host path entered where the server sees
-a container path excludes every item and reports "nothing recoverable", which is
-indistinguishable from a correct empty result.  Both remain editable for the case
-that motivated them: a library spanning two roots where only one is the
-destination.
+The library list is the only editable scope setting.  The two path settings were
+editable through 1.0.0.7; requiring them guaranteed that the first run of a fresh
+install failed, and the prefix field asked the operator to retype something the
+server already knows — in a form that is easy to get wrong and whose failure is
+silent.  A host path entered where the server sees a container path excludes
+every item and reports "nothing recoverable", which is indistinguishable from a
+correct empty result.  1.0.0.8 removed both controls.
+
+Removing a control does not remove what it wrote.  An upgrade preserved whatever
+those two fields last held, and the task went on honouring them from a page that
+no longer showed them — a setting that changes write scope, simultaneously active
+and uneditable.  A run therefore clears both before resolving scope, and says in
+the log what it found and what will change as a result.  The values are the
+operator's own past choice and the reason their results are about to differ, so
+they are named rather than silently reset.
 
 Defaulting is not the same as tolerating.  "Empty means every library" is a
 reading of an *absent* selection, and it must never be reached by way of a
