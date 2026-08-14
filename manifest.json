@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.17",
+        "changelog": "## What's Changed\n\n- fix(config): take the scheduled-task shim off the settings page (09a69cc)\n- fix(scope): make an empty library selection mean nothing, not everything (0eb86c8)\n- chore(release): update the plugin catalogues for version 1.0.0.16 (12dfe6e)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.16...1.0.0.17\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.17/RestoreUserDataAfterMove_1.0.0.17_jellyfin-10.11.11.zip",
+        "checksum": "2aead029658b3adbbc6594c6039e86d8",
+        "timestamp": "2026-08-14T17:43:26Z"
+      },
+      {
         "version": "1.0.0.16",
         "changelog": "## What's Changed\n\n- fix(revalidation): re-check key uniqueness against the catalogue per write (c5d075e)\n- fix(task): write a per-write ledger as the run goes, not a plan at the end (060d082)\n- docs(safety): state the write race instead of promising it away (97d42a7)\n- docs(release): point both server lines at their own catalogue (628ab3d)\n- chore(release): update the plugin catalogues for version 1.0.0.15 (9daf456)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.15...1.0.0.16\n",
         "targetAbi": "10.11.11.0",
