@@ -155,8 +155,32 @@ means a bug worth finding rather than noise.
 | 0.95 | 0.05 | 0.50 | 45.1% | 45.5% | +0.4 |
 | 0.55 | 0.10 | 0.75 | 12.4% | 12.4% | 0.0 |
 
-Real validation would require analyzer results from real installations. There are
-none yet.
+Real validation would require analyzer results from real installations. There is
+one: [`../field/`](../field/), a production 10.11.11 server of ~31,000 items and
+~9,200 detached rows, run with plugin 1.0.0.5.
+
+One is not validation, and it is worth being exact about the gap rather than
+letting a single result stand in for a distribution. That server contributes one
+point, its counts are rounded and perturbed at the operator's request, and it was
+never placed on any curve here — the sweep's predictive quantity is
+opportunity-weighted coverage, which the field summary does not report. So it
+cannot confirm or refute a single one of the curves above.
+
+What it does do is check the assumptions the curves are built on, which is not
+nothing:
+
+- Dead GUID rows really are the largest row bucket at production scale
+  (`no_current_key_match` ≈ 40% of the table), so the row-versus-opportunity
+  artifact in Result 4 is real and not a modelling quirk.
+- The identity rule's strictness costs almost nothing on a real library: single
+  digits of `insufficient_identity_evidence` and `ambiguous_current_key` against
+  roughly three thousand candidates.
+- Provider hydration holds at scale — all but one of ~31,000 eligible items
+  reported a key beyond its own GUID — which is the assumption every coverage
+  figure in this document rests on.
+
+The honest summary is that the model's *shape* has been checked against reality
+once, and its *numbers* have not been checked at all.
 
 ## What this does and does not establish
 
@@ -171,7 +195,10 @@ series length.
 single measured coverage number is enough to place one. Opportunity-weighted
 coverage is the predictive quantity; the item-weighted figure a server can easily
 measure only approximates it, and the approximation degrades exactly when viewing
-is concentrated in a few titles.
+is concentrated in a few titles. The one field result in
+[`../field/`](../field/) does not change this: it corroborates the assumptions
+the curves are built on, and it is a single rounded installation that was never
+placed on one.
 
 The simulation also inherits its stranding model from `evidence/alpha`. If Jellyfin
 strands rows differently — on another provider, or after an upstream change —

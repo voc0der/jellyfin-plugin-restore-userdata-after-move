@@ -85,3 +85,11 @@ Whether the yield justifies the write path. That is a judgement about a few hund
 recoverable snapshots on a ~31,000-item library, and it belongs to whoever runs the
 server. Nothing here is a second data point either — one installation, and an
 unusually large one.
+
+Nor does it place this server on any curve in [`../sweep/`](../sweep/). Those are
+plotted against opportunity-weighted IMDb coverage, which is not something this
+summary reports and not something a server can easily measure. What this result
+checks is the assumptions underneath them — dead GUID rows dominating the table,
+the identity rule costing almost nothing, provider hydration holding at scale —
+so the simulation's shape has been compared against reality once and its numbers
+have not been compared at all.
