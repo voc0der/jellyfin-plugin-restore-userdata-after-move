@@ -10,9 +10,12 @@ interval triggers — so it cannot express the dependency this task actually has
 and a shipped default would be a guess at an operator's maintenance window that
 runs mid-move when wrong.  It analyses and restores in the same
 run, writes a plan artifact for the record, skips itself while a library scan is
-in progress, and re-checks each target immediately before writing so it can never
-overwrite state a user set since the analysis.  Detached rows are never modified
-or deleted.
+in progress, and re-checks each target immediately before writing, so state a
+user set since the analysis is not overwritten.  One window survives that check
+and cannot be closed from a plugin: the round trip between the final row-existence
+query and the save itself, since Jellyfin exposes no compare-and-swap for user
+data and §4 forbids writing to the database directly ([§9.4](#94-concurrency-limitation)).
+Detached rows are never modified or deleted.
 
 The following sections describe machinery that was **designed and then removed**,
 and are kept only for the reasoning behind them:

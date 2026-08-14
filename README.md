@@ -87,11 +87,19 @@ Running it repeatedly is safe by construction, not by promise:
   and is never written again.
 - If you then change it yourself — mark something unwatched, un-favourite it —
   the pair reads as `current_state_conflict` and is never written again either.
-  **A scheduled run cannot undo what you just did.** That holds even if you do it
-  while a run is in progress: every write re-checks, against the database and in
-  the instant before it lands, that the item still has no user-data row of any
-  kind. Clearing something writes a real row full of default values, so a clear
-  is an act the run can see, not an absence it can mistake for untouched.
+  Clearing something writes a real row full of default values, so a clear is an
+  act the run can see, not an absence it can mistake for untouched. **A run that
+  starts after you did it cannot undo it.**
+- Doing it *during* a run is nearly as safe, but not absolutely: the last thing
+  each write does before saving is ask the database whether that pair has a row
+  of any kind, and skip if it has. What is left is the gap between that question
+  and the save — one round trip — because Jellyfin offers no compare-and-swap for
+  user data and this plugin will not write to the database directly. A change
+  landing inside that gap is overwritten. Reaching it at all means clearing
+  something that currently has no row, which from your side is clearing something
+  that already reads as clear, and the stranded row survives either way, so the
+  state comes back on the next run. It is a narrow window rather than no window,
+  and it is worth knowing about rather than being promised away.
 - Every write also re-checks that the target is still the item the evidence
   pointed at — still in a selected library, still beneath its folders, still
   holding its media file, and still reporting the IDs the stranded row matched
