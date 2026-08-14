@@ -150,25 +150,9 @@ public class MatchingTests
     [Fact]
     public void TwoCorroboratingProviderKeysAreSufficient()
     {
-        var movie = new CurrentItemSnapshot
-        {
-            ItemId = MovieId,
-            Kind = ItemKind.Movie,
-            Name = "Provider Only",
-            Path = Scenario.DefaultMoviePath,
-            PathExists = true,
-            LibraryIds = [Scenario.LibraryId],
-            UserDataKeys = ["603", "9977"],
-            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["Tmdb"] = "603",
-                ["Tvdb"] = "9977",
-            },
-        };
-
         var result = Scenario.Analyze(
             [Scenario.Row(Scenario.UserA, "603"), Scenario.Row(Scenario.UserA, "9977")],
-            [movie]);
+            [ProviderOnlyMovie()]);
 
         var write = Assert.Single(result.Writes);
         Assert.Equal(IdentityEvidenceRule.CorroboratingProviderKeysRule, write.EvidenceRule);
@@ -179,32 +163,82 @@ public class MatchingTests
     {
         // Same state, different detach moments: the two rows are not evidence that
         // they described the same item.
-        var movie = new CurrentItemSnapshot
-        {
-            ItemId = MovieId,
-            Kind = ItemKind.Movie,
-            Path = Scenario.DefaultMoviePath,
-            PathExists = true,
-            LibraryIds = [Scenario.LibraryId],
-            UserDataKeys = ["603", "9977"],
-            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["Tmdb"] = "603",
-                ["Tvdb"] = "9977",
-            },
-        };
-
         var rows = new[]
         {
             Scenario.Row(Scenario.UserA, "603", retention: new DateTime(2026, 8, 12, 14, 22, 9, DateTimeKind.Utc)),
             Scenario.Row(Scenario.UserA, "9977", retention: new DateTime(2026, 8, 11, 9, 0, 0, DateTimeKind.Utc)),
         };
 
-        var result = Scenario.Analyze(rows, [movie]);
+        var result = Scenario.Analyze(rows, [ProviderOnlyMovie()]);
 
         Assert.Empty(result.Writes);
         Assert.All(result.SourceRows, row => Assert.Equal(ReasonCode.InsufficientIdentityEvidence, row.Reason));
     }
+
+    [Fact]
+    public void ProviderKeysWithNoRetentionStampAtAllDoNotCorroborate()
+    {
+        // Two absences are not an agreement. Everything else about these rows
+        // matches — which is unremarkable, since "watched once, no rating" is what
+        // most rows look like — so the stamp is the entire corroboration, and
+        // reading two missing stamps as equal admits exactly the wrong-namespace
+        // attribution the rule exists to refuse.
+        var rows = new[]
+        {
+            Scenario.Row(Scenario.UserA, "603") with { RetentionDate = null },
+            Scenario.Row(Scenario.UserA, "9977") with { RetentionDate = null },
+        };
+
+        var result = Scenario.Analyze(rows, [ProviderOnlyMovie()]);
+
+        Assert.Empty(result.Writes);
+        Assert.All(result.SourceRows, row => Assert.Equal(ReasonCode.InsufficientIdentityEvidence, row.Reason));
+    }
+
+    [Fact]
+    public void AProviderKeyWithNoRetentionStampCannotCorroborateOneThatHasOne()
+    {
+        var rows = new[]
+        {
+            Scenario.Row(Scenario.UserA, "603"),
+            Scenario.Row(Scenario.UserA, "9977") with { RetentionDate = null },
+        };
+
+        var result = Scenario.Analyze(rows, [ProviderOnlyMovie()]);
+
+        Assert.Empty(result.Writes);
+        Assert.All(result.SourceRows, row => Assert.Equal(ReasonCode.InsufficientIdentityEvidence, row.Reason));
+    }
+
+    [Fact]
+    public void ARowWithNoRetentionStampIsStillRecoverableOnItsOwnEvidence()
+    {
+        // The stamp is required to corroborate, not to be valid. An IMDb key needs
+        // no corroboration, so losing the stamp costs this row nothing.
+        var rows = new[] { Scenario.Row(Scenario.UserA, "tt0133093") with { RetentionDate = null } };
+
+        var result = Scenario.Analyze(rows, [Scenario.Movie(MovieId)]);
+
+        var write = Assert.Single(result.Writes);
+        Assert.Equal(IdentityEvidenceRule.ImdbRule, write.EvidenceRule);
+    }
+
+    /// <summary>A movie identified only by provider keys, with no IMDb ID to short-circuit case 3.</summary>
+    private static CurrentItemSnapshot ProviderOnlyMovie() => new()
+    {
+        ItemId = MovieId,
+        Kind = ItemKind.Movie,
+        Name = "Provider Only",
+        Path = Scenario.DefaultMoviePath,
+        PathExists = true,
+        LibraryIds = [Scenario.LibraryId],
+        UserDataKeys = ["603", "9977"],
+        ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Tmdb"] = "603",
+            ["Tvdb"] = "9977",
+        },
+    };
 
     [Fact]
     public void SeriesGuidDerivedEpisodeKeyIsRecordedButNotAdmitted()

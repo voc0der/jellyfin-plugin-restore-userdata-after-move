@@ -70,9 +70,10 @@ public static class IdentityEvidenceRule
         }
 
         // Case 3: two distinct provider-derived keys whose rows agree exactly,
-        // including the retention stamp — corroboration rather than proof, but it
-        // removes the unsafe single-bare-number inference while keeping TMDb-only
-        // recovery where Jellyfin wrote more than one usable key.
+        // including a retention stamp both of them actually carry — corroboration
+        // rather than proof, but it removes the unsafe single-bare-number inference
+        // while keeping TMDb-only recovery where Jellyfin wrote more than one
+        // usable key.
         var providerKeys = keys
             .Where(k => k.Evidence is KeyEvidence.OtherProvider or KeyEvidence.Imdb or KeyEvidence.SeriesImdbEpisode)
             .GroupBy(k => k.Key, StringComparer.Ordinal)
@@ -93,7 +94,20 @@ public static class IdentityEvidenceRule
         return new IdentityEvidenceVerdict(false, NoneRule);
     }
 
+    // The retention stamp is the whole of the corroboration: identical state
+    // proves nothing on its own, because "watched once, never resumed, no rating"
+    // is what most rows look like, and two such rows written years apart about
+    // different titles match on every other field. Only the stamp says they were
+    // detached by the same event.
+    //
+    // Two missing stamps are therefore not a match, they are two absences, and
+    // `null == null` would read them as agreement — the exact inference this rule
+    // exists to refuse. A row without a stamp is not rejected outright: it can
+    // still be recovered under the GUID or IMDb rules, which do not need one. It
+    // just cannot corroborate, or be corroborated by, anything.
     private static bool Corroborates(DetachedUserDataRow a, DetachedUserDataRow b) =>
         RecoveryStateComparer.Exact.Equals(a.State, b.State)
-        && DateTimeNormalization.ToUtc(a.RetentionDate) == DateTimeNormalization.ToUtc(b.RetentionDate);
+        && DateTimeNormalization.ToUtc(a.RetentionDate) is { } left
+        && DateTimeNormalization.ToUtc(b.RetentionDate) is { } right
+        && left == right;
 }

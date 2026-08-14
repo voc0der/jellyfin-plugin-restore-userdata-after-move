@@ -512,12 +512,22 @@ holds:
 2. A contributing key is the current item or series-derived IMDb key; IMDb IDs
    identify one title/entity across media types.
 3. At least two distinct provider-derived current keys have detached rows with
-   identical `RecoveryState` and identical `RetentionDate`.
+   identical `RecoveryState` and identical `RetentionDate`, **both of which must
+   be present**.  Two rows with no retention stamp do not corroborate: that is
+   two absences, not an agreement, and reading `null == null` as a match is the
+   inference this case exists to refuse.  Identical state alone is nearly
+   worthless as evidence — "watched once, never resumed, no rating" describes
+   most rows in most libraries — so the stamp is what carries the claim that both
+   rows came from the same detach event.
 
 Case 3 is corroboration rather than mathematical proof, but removes the unsafe
 single bare-number inference while retaining TMDb-only recovery where Jellyfin
 wrote more than one usable key.  A unique target supported only by one numeric
 key is reported as `insufficient_identity_evidence` and is not applied.
+
+A row without a retention stamp is not invalid; §7.4 does not reject it, and it
+can still be recovered under case 1 or case 2, neither of which needs one.  It
+simply cannot corroborate, or be corroborated by, anything.
 
 ### 7.4 Collapse redundant keys
 
