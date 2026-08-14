@@ -255,9 +255,10 @@ These are implementation requirements, not preferences.
    library and be beneath a configured final path prefix.
 7. **No parallel writes.** Recovery is sequential to limit database contention
    and make failure boundaries obvious.
-8. **No silent partial success.** The first save or verification failure stops
-   the apply task.  Completed writes remain recorded and are safe to discover on
-   a rerun.
+8. **No silent partial success.** The first write that ends `failed` or
+   `uncertain` stops the run; the remainder are recorded `not_attempted`.  A
+   `skipped` write is a decision, not a failure, and does not stop anything.
+   Completed writes remain recorded and are safe to discover on a rerun.
 9. **No retained apply mode.** The task consumes and persists removal of its arm
    before writing the first item.
 10. **No dependency on reports for correctness.** If a crash occurs after a
@@ -777,12 +778,23 @@ values make retries idempotent.
 ### 9.3 Failure behavior
 
 - Cancellation stops before the next item and reports a canceled partial run.
-- A save exception, failed verification, database exception, or ledger failure
-  stops the run immediately.
+- A save exception, failed verification, or exception thrown by any of the
+  per-write guards stops the run at that write.  The remaining writes are
+  recorded `not_attempted` and the plan is still published.
 - A ledger failure after a successful save does not roll the user state back.
   The next analysis detects semantic equality and reports `already_applied`.
 - There is deliberately no transaction spanning multiple titles or users.
 - Detached rows remain exactly as they were before the run.
+
+Stopping is not about the one item that went wrong; the stranded row behind it
+survives either way, so nothing is lost by retrying it tomorrow.  It is about the
+ones after it.  A write that threw or failed verification says the process no
+longer understands the server it is writing to — `uncertain` because it cannot
+say what it did to the last item, `failed` because a guard every *subsequent*
+item depends on is the thing that threw — and continuing to mutate user data past
+that point widens the blast radius on the strength of an assumption that has just
+been contradicted.  A `skipped` write contradicts nothing: a guard declining is
+the guard working, and the run carries on.
 
 ### 9.4 Concurrency limitation
 

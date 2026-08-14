@@ -180,10 +180,14 @@ public class RestoreUserDataTask : IScheduledTask
 
         if (uncertain + failed > 0)
         {
+            var stoppedBy = uncertain > 0
+                ? "the save was entered and its result is unknown"
+                : "it threw before writing anything";
+
             throw new InvalidOperationException(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{uncertain + failed} of {result.Writes.Count} restores did not complete: {failed} threw before writing anything and {uncertain} were left in an unknown state. The stranded rows are untouched; the next run will retry them."),
+                    $"This run stopped at a restore that did not complete: {stoppedBy}. {CountOf(outcomes, WriteOutcome.Restored)} of {result.Writes.Count} restores had completed and {CountOf(outcomes, WriteOutcome.NotAttempted)} were not attempted. The stranded rows are untouched; the next run plans them again."),
                 planFailure);
         }
 
@@ -323,40 +327,52 @@ public class RestoreUserDataTask : IScheduledTask
         // against is read from the live item inside the loop.
         var ownership = collector.BuildKeyOwnership(cancellationToken);
 
-        var results = new List<WriteResult>(writes.Count);
+        // Safety invariant 8 lives in ApplySequence, where it can be tested by
+        // injecting a failure rather than by arranging for a real server to
+        // produce one. All this supplies is the write itself.
+        var results = await ApplySequence.RunAsync(
+            writes,
+            (write, token) => ApplyAsync(writer, reader, collector, write, options, ownership, token),
+            LibraryScanIsRunning,
+            done => progress.Report(50 + (45.0 * done / writes.Count)),
+            cancellationToken).ConfigureAwait(false);
 
-        for (var index = 0; index < writes.Count; index++)
+        ReportAbandoned(results);
+        return results;
+    }
+
+    /// <summary>
+    /// Says why a run stopped short, once, rather than per abandoned write.
+    /// </summary>
+    private void ReportAbandoned(IReadOnlyList<WriteResult> results)
+    {
+        var abandoned = results.Where(result => result.Outcome == WriteOutcome.NotAttempted).ToArray();
+        if (abandoned.Length == 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // The entry check said no scan was running; one can still start here.
-            // A scan invalidates every remaining target at once — items are being
-            // removed and recreated — so this abandons the rest of the batch rather
-            // than revalidating into a moving library. Nothing is lost: the stranded
-            // rows are untouched and the next run plans them again.
-            if (LibraryScanIsRunning())
-            {
-                _logger.LogWarning(
-                    "A library scan started part-way through this run. Abandoning the remaining {Count} restores; "
-                    + "the stranded rows are untouched, so the next run picks them up.",
-                    writes.Count - index);
-                results.AddRange(writes.Skip(index).Select(write => WriteResult.NotAttempted(write, "library_scan_started")));
-                break;
-            }
-
-            results.Add(await ApplyAsync(writer, reader, collector, writes[index], options, ownership, cancellationToken)
-                .ConfigureAwait(false));
-            progress.Report(50 + (45.0 * (index + 1) / writes.Count));
+            return;
         }
 
-        return results;
+        if (abandoned[0].Detail == ApplySequence.LibraryScanStarted)
+        {
+            _logger.LogWarning(
+                "A library scan started part-way through this run. Abandoning the remaining {Count} restores; "
+                + "the stranded rows are untouched, so the next run picks them up.",
+                abandoned.Length);
+            return;
+        }
+
+        _logger.LogError(
+            "Stopping after the restore above rather than continuing into {Count} more ({Reason}). "
+            + "The stranded rows are untouched, so the next run plans them again.",
+            abandoned.Length,
+            abandoned[0].Detail);
     }
 
     /// <remarks>
     /// <para>Nothing in here is allowed to escape except cancellation. A write
-    /// that throws must not skip the plan: the plan is written after this pass, so
-    /// an exception escaping here would leave user state changed with no record of
-    /// what changed it.</para>
+    /// that throws does stop the batch, but it must stop it by returning — the
+    /// plan is written after this pass, so an exception escaping here would leave
+    /// user state changed with no record of what changed it.</para>
     /// <para>Which side of the save it threw on is the whole of the difference
     /// between <see cref="WriteOutcome.Failed"/> and
     /// <see cref="WriteOutcome.Uncertain"/>. Everything before the save leaves the
