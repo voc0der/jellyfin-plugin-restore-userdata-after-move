@@ -36,6 +36,10 @@
                      elements. They used to share one, so pressing Run now wiped the
                      only place in the UI that says this task has no schedule. -->
                 <div class="fieldDescription" style="margin-top:0.6em;">
+                    Run now saves the libraries ticked above before it starts, so the run always
+                    matches what is on screen.
+                </div>
+                <div class="fieldDescription" style="margin-top:0.6em;">
                     This task has no schedule of its own. To run it regularly, add a trigger under
                     Dashboard &rarr; Scheduled Tasks &rarr; Restore user data after move, timed to land
                     after whatever moves your files and the library scan that follows it. Results
@@ -115,30 +119,32 @@
                     'Could not save the settings. Nothing was changed.';
             }
 
-            function save(event) {
-                event.preventDefault();
-                Dashboard.showLoadingMsg();
-
-                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+            // Resolves only once the server holds what is currently ticked. Both
+            // buttons go through this, because what is on screen is the only thing
+            // the reader believes they have chosen.
+            function persistSelection() {
+                return ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     config.EligibleLibraryIds = Array.prototype.map.call(
                         page.querySelectorAll('.libraryCheckbox:checked'),
                         function (input) { return input.getAttribute('data-libraryid'); });
 
-                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
-                        Dashboard.processPluginConfigurationUpdateResult(result);
-                    }, failedToSave);
+                    return ApiClient.updatePluginConfiguration(pluginId, config);
+                });
+            }
+
+            function save(event) {
+                event.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                persistSelection().then(function (result) {
+                    Dashboard.processPluginConfigurationUpdateResult(result);
                 }, failedToSave);
 
                 return false;
             }
 
-            // Starting it from here is the whole point: nobody should have to be
-            // told to go find it under Scheduled Tasks to see whether it works.
-            function run() {
-                var status = page.querySelector('#runStatus');
-                status.textContent = 'Starting...';
-
-                ApiClient.getJSON(ApiClient.getUrl('ScheduledTasks')).then(function (tasks) {
+            function startTask(status) {
+                return ApiClient.getJSON(ApiClient.getUrl('ScheduledTasks')).then(function (tasks) {
                     var task = (tasks || []).filter(function (candidate) {
                         return candidate.Key === taskKey;
                     })[0];
@@ -158,6 +164,29 @@
                     });
                 }, function () {
                     status.textContent = 'Could not reach the server.';
+                });
+            }
+
+            // Starting it from here is the whole point: nobody should have to be
+            // told to go find it under Scheduled Tasks to see whether it works.
+            //
+            // It saves first, unconditionally. The task reads its scope from the
+            // server, never from this page, so a box ticked but not saved would
+            // start a run against a scope nobody chose - whatever was saved last,
+            // or on a fresh install every movie and TV library on the server. Two
+            // buttons whose order silently decides what a mutating task writes to
+            // is not a thing to document; the fix is to remove the order.
+            function run() {
+                var status = page.querySelector('#runStatus');
+                status.textContent = 'Saving the library selection...';
+
+                persistSelection().then(function () {
+                    status.textContent = 'Starting...';
+                    startTask(status);
+                }, function () {
+                    status.textContent =
+                        'Could not save the library selection, so the task was not started. '
+                        + 'Nothing was changed and nothing ran.';
                 });
             }
 
