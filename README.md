@@ -108,21 +108,34 @@ back and verified. Nothing writes to the database directly.
 
 ## Installing
 
-**Jellyfin 10.11.11** — add the plugin repository to Dashboard → Plugins →
-Repositories:
+There is one repository URL per server version. Add the one matching your server
+under Dashboard → Plugins → Repositories, then install **Restore User Data After
+Move** from the catalogue and restart.
+
+**Jellyfin 10.11.11**
 
 ```
 https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/manifest.json
 ```
 
-Then install **Restore User Data After Move** from the catalogue and restart.
+**Jellyfin 12.0 RC5**
 
-**Jellyfin 12.0 RC5** — download
-`RestoreUserDataAfterMove_<version>_jellyfin-12.0.0-rc5.zip` from the
-[latest release](https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases),
-unzip it into `<jellyfin-data>/plugins/`, and restart. The RC build is not in the
-catalogue on purpose: Jellyfin treats `targetAbi` as a *minimum*, so listing both
-builds would let a 12.0 server offer you the 10.11 one.
+```
+https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/manifest-jellyfin-12.json
+```
+
+**Add exactly one of them.** Jellyfin treats `targetAbi` as a *minimum*, not a
+match, so a 12.0 server considers the 10.11 build installable and will happily
+offer it to you — it then loads and the plugin refuses to run, because it checks
+the server version itself. Nothing expressible in a manifest prevents that, which
+is why the split is at the repository level. Add both and Jellyfin merges them by
+plugin ID and offers whichever version number is highest, which is the same
+problem again.
+
+Either build is also on the
+[releases page](https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases)
+if you would rather unzip `RestoreUserDataAfterMove_<version>_<server>.zip` into
+`<jellyfin-data>/plugins/` by hand.
 
 **Updating from 1.0.0.8 or earlier** — those builds shipped a 3am daily trigger.
 This one ships none, and Jellyfin only writes a task's triggers to disk once you

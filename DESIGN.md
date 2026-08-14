@@ -907,6 +907,23 @@ prerelease will also load and run on any other server reporting that version, so
 The model check is a compatibility check, not an authenticity one.  It cannot
 distinguish two builds that share a model, and does not claim to.
 
+**One catalogue per server line.**  Because `targetAbi` is a minimum
+([§17.3](#173-plugin-abi-enforcement)), a catalogue entry built for 10.11.11 is
+considered installable by a 12.0 server.  Omitting the 12.0 build from that
+catalogue therefore does not hide the 10.11 build from 12.0 — it only makes the
+wrong build the *only* offer a 12.0 server receives, which then installs, loads,
+and is refused by the runtime version gate.  A manifest cannot express an upper
+bound, so the split has to be at the level above it: `manifest.json` carries the
+10.11.11 builds and `manifest-jellyfin-12.json` the 12.0 ones, and each server
+line is pointed at its own URL.
+
+The residual is worth stating rather than implying away.  Nothing stops a 12.0
+operator from adding the 10.11 URL, and both catalogues carry the same plugin
+GUID, so adding both merges them and Jellyfin offers whichever version number is
+highest.  The runtime gate is what catches either mistake, loudly and before the
+database is touched.  What the split buys is that following the instructions now
+produces a working install on both lines, which it previously did not on one.
+
 No schema-name or raw-SQL branches are allowed.  If the EF model changes enough
 to break compilation or the tested projection, publish a new plugin build.
 

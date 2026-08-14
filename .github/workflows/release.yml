@@ -163,52 +163,81 @@ jobs:
           echo "verified ${name}"
         done
 
-    # Only the 10.11.11 build is published to the plugin catalogue. Jellyfin
-    # treats targetAbi as a *minimum*, so listing both builds under one version
-    # would make each of them look installable on a 12.0 server, and the server
-    # could hand out the 10.11 archive. The 12.0-rc5 archive ships on the release
-    # for people running the RC to install by hand; see README.md.
-    - name: Update manifest.json
+    # One catalogue per server line, and the split is forced rather than tidy.
+    # Jellyfin's targetAbi is a *minimum* (DESIGN §17.3), so an entry built for
+    # 10.11.11 is considered installable by a 12.0 server. Publishing only the
+    # 10.11 archive therefore does not hide it from 12.0 — it makes the wrong
+    # build the only offer a 12.0 server gets, and that build loads and is then
+    # refused by the plugin's own version gate. Nothing expressible in one
+    # manifest fixes that, so a 12.0 server is pointed at a catalogue whose
+    # entries are the 12.0 builds; see README.md.
+    - name: Update the plugin catalogues
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         VERSION="${{ steps.version.outputs.version }}"
-        ZIP_NAME="RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip"
         TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         REPO="${{ github.repository }}"
 
-        # Both taken from the archive as the release serves it, not from the local
-        # build output: the catalogue's checksum then describes the exact bytes
-        # behind the URL it publishes, and the ABI cannot disagree with what the
-        # plugin itself declares.
-        CHECKSUM=$(md5sum "published/${ZIP_NAME}" | awk '{print $1}')
-        TARGET_ABI=$(unzip -p "published/${ZIP_NAME}" '*/meta.json' | jq -r .targetAbi)
-        echo "targetAbi from published artifact: ${TARGET_ABI}"
+        # Copied, not duplicated. Two catalogues describing the same plugin GUID
+        # differently is a bug waiting for somebody to edit one of them.
+        SHARED=$(jq -c '.[0] | {guid, name, overview, description, category, owner}' manifest.json)
 
-        jq --arg version "$VERSION" \
-           --rawfile changelog CHANGELOG.md \
-           --arg checksum "$CHECKSUM" \
-           --arg timestamp "$TIMESTAMP" \
-           --arg abi "$TARGET_ABI" \
-           --arg url "https://github.com/${REPO}/releases/download/${VERSION}/${ZIP_NAME}" \
-           '.[0].versions = [{
-             "version": $version,
-             "changelog": $changelog,
-             "targetAbi": $abi,
-             "sourceUrl": $url,
-             "checksum": $checksum,
-             "timestamp": $timestamp
-           }] + .[0].versions' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+        publish() {
+          manifest="$1"
+          zip_name="RestoreUserDataAfterMove_${VERSION}_$2.zip"
 
-        # Only advertise an icon once one exists, rather than publishing a URL
-        # that 404s in the plugin catalogue.
-        if [ -f icon.png ]; then
-          IMAGE_URL="https://raw.githubusercontent.com/${REPO}/main/icon.png"
-          jq --arg imageUrl "$IMAGE_URL" '.[0].imageUrl = $imageUrl' manifest.json > manifest.tmp \
-            && mv manifest.tmp manifest.json
-        else
-          echo "No icon.png in the repository root; leaving imageUrl unset."
-          jq 'del(.[0].imageUrl)' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
-        fi
+          # Both taken from the archive as the release serves it, not from the
+          # local build output: the catalogue's checksum then describes the exact
+          # bytes behind the URL it publishes, and the ABI cannot disagree with
+          # what the plugin itself declares.
+          checksum=$(md5sum "published/${zip_name}" | awk '{print $1}')
+          abi=$(unzip -p "published/${zip_name}" '*/meta.json' | jq -r .targetAbi)
+          echo "${manifest}: ${zip_name}, targetAbi ${abi}, md5 ${checksum}"
+
+          jq --argjson shared "$SHARED" \
+             --arg version "$VERSION" \
+             --rawfile changelog CHANGELOG.md \
+             --arg checksum "$checksum" \
+             --arg timestamp "$TIMESTAMP" \
+             --arg abi "$abi" \
+             --arg url "https://github.com/${REPO}/releases/download/${VERSION}/${zip_name}" \
+             '[$shared + {
+               "versions": ([{
+                 "version": $version,
+                 "changelog": $changelog,
+                 "targetAbi": $abi,
+                 "sourceUrl": $url,
+                 "checksum": $checksum,
+                 "timestamp": $timestamp
+               }] + .[0].versions)
+             }]' "$manifest" > manifest.tmp && mv manifest.tmp "$manifest"
+
+          # Only advertise an icon once one exists, rather than publishing a URL
+          # that 404s in the plugin catalogue.
+          if [ -f icon.png ]; then
+            jq --arg imageUrl "https://raw.githubusercontent.com/${REPO}/main/icon.png" \
+               '.[0].imageUrl = $imageUrl' "$manifest" > manifest.tmp && mv manifest.tmp "$manifest"
+          else
+            echo "No icon.png in the repository root; leaving imageUrl unset."
+            jq 'del(.[0].imageUrl)' "$manifest" > manifest.tmp && mv manifest.tmp "$manifest"
+          fi
+        }
+
+        publish manifest.json             jellyfin-10.11.11
+        publish manifest-jellyfin-12.json jellyfin-12.0.0-rc5
+
+        # A 12.0 server offered a 10.11 archive is the failure this split exists
+        # to prevent, so assert the split rather than assume the loop above ran
+        # the way it reads.
+        for pair in "manifest.json:10.11.11.0" "manifest-jellyfin-12.json:12.0.0.0"; do
+          file="${pair%%:*}"
+          want="${pair##*:}"
+          got=$(jq -r '.[0].versions[0].targetAbi' "$file")
+          if [ "$got" != "$want" ]; then
+            echo "::error::${file} now advertises targetAbi ${got}, expected ${want}"
+            exit 1
+          fi
+        done
 
     # Pushed with GITHUB_TOKEN, which does not retrigger workflows, so this
     # commit cannot start another release run.
@@ -217,10 +246,10 @@ jobs:
       run: |
         git config user.name "voc0der"
         git config user.email "contact@netspace.in"
-        git add manifest.json
+        git add manifest.json manifest-jellyfin-12.json
         # Conventional subject, same as every hand-written commit: CONTRIBUTING
         # sets one naming rule and a bot is not exempt from it.
-        git commit -m "chore(release): update manifest.json for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+        git commit -m "chore(release): update the plugin catalogues for version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
 
         # A swallowed push failure is how 1.0.0.4 ended up released but absent
         # from the catalogue. Rebase onto whatever landed meanwhile and retry;
