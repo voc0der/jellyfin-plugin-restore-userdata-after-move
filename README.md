@@ -148,6 +148,14 @@ Either build is also on the
 if you would rather unzip `RestoreUserDataAfterMove_<version>_<server>.zip` into
 `<jellyfin-data>/plugins/` by hand.
 
+**Updating from 1.0.0.16 or earlier** — in those builds, no libraries ticked
+meant *every* movie and TV library, so an install that never visited the settings
+page was running against all of them. It now means none, and the run refuses and
+says so rather than picking a scope for you. If you never ticked anything, tick
+the libraries you want on the plugin's settings page and save; until you do, the
+task fails with a message naming that page. Nothing else changes — an install
+that did tick libraries keeps exactly the scope it had.
+
 **Updating from 1.0.0.8 or earlier** — those builds shipped a 3am daily trigger.
 This one ships none, and Jellyfin only writes a task's triggers to disk once you
 change them yourself, so an install still running the old default **loses it on
