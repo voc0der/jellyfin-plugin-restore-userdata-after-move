@@ -17,6 +17,16 @@ namespace Jellyfin.Plugin.UserDataRestore.Core.Tests;
 /// </remarks>
 public class SweepTests
 {
+    /// <summary>Seeds averaged when asserting on a distribution's mean.</summary>
+    private const int Seeds = 12;
+
+    /// <summary>
+    /// Series drawn per seed at the longest configured mean. The estimator's
+    /// error falls with the number of *series*, not the number of episodes, so
+    /// this is the figure the population is sized from.
+    /// </summary>
+    private const int SeriesPerSeed = 200;
+
     [Fact]
     public void EveryEpisodeOfASeriesSharesItsProviderIds()
     {
@@ -92,16 +102,27 @@ public class SweepTests
     [InlineData(6.0)]
     [InlineData(18.0)]
     [InlineData(60.0)]
+    [InlineData(150.0)]
     public void SeriesLengthsHaveTheConfiguredMean(double configured)
     {
         // The series-length curve is plotted against this number, so it has to be
         // the number. An earlier sampler rounded a continuous exponential up and
         // capped at 400: a configured 1 produced 1.57 and a configured 150
         // produced 133.
-        var realized = Enumerable.Range(1, 12)
+        //
+        // Every point the published sweep reports is covered, 150 included, and
+        // that one is the reason this test exists: it is where a reintroduced cap
+        // or a truncated tail would show first, and the only point where the
+        // original defect was large enough to see by eye.
+        var realized = Enumerable.Range(1, Seeds)
             .Select(seed => PopulationGenerator.Generate(new LibraryShape
             {
-                Titles = 4000,
+                // Sized against the longest configured mean rather than left at a
+                // fixed count. A geometric with mean 150 drawn a handful of times
+                // per seed has a standard error of tens of episodes, so a
+                // population that is generous at mean 6 is noise at mean 150 —
+                // and a flapping test about tail shape is worse than none.
+                Titles = (int)Math.Max(4000, configured * SeriesPerSeed),
                 EpisodeShare = 1,
                 MeanEpisodesPerSeries = configured,
                 Seed = seed,
