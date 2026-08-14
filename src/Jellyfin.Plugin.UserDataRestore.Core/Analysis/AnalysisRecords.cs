@@ -66,7 +66,7 @@ public sealed record CandidateRecord
 }
 
 /// <summary>
-/// One recovery write, as it would be performed by a later apply task.
+/// One recovery write, as the same run is about to perform it.
 /// </summary>
 public sealed record PlannedWrite
 {
@@ -173,7 +173,7 @@ public sealed record AnalysisResult
     /// <summary>Gets one record per collapsed candidate.</summary>
     public required IReadOnlyList<CandidateRecord> Candidates { get; init; }
 
-    /// <summary>Gets the ordered list of writes a later apply task would perform.</summary>
+    /// <summary>Gets the ordered list of writes this run will perform.</summary>
     public required IReadOnlyList<PlannedWrite> Writes { get; init; }
 
     /// <summary>Gets the count of detached rows per reason code.</summary>

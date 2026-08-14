@@ -208,7 +208,7 @@ still has every column it reads, and refuses if not.
   [evidence/alpha/](evidence/alpha/) holds the analyzer's validation runs and
   published plans.
 - [scripts/gap/](scripts/gap/) — the end-to-end harness that stands up a
-  disposable server, strands user data for real, and proves the apply path puts
+  disposable server, strands user data for real, and proves the write path puts
   it back.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — building, linting, and what not to change
   without evidence.

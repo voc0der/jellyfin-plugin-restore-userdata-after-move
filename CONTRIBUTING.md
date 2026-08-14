@@ -57,11 +57,22 @@ decided.
 
 Those are not closed forever, but reopening one takes evidence, not preference.
 
-Two properties are load-bearing and worth stating plainly:
+One task analyses and restores in the same pass. There is no separate apply
+task, no plan to arm, and no whole-plan preflight — an earlier design had all
+three, and the parts of DESIGN.md describing them are marked SUPERSEDED rather
+than deleted, because the reasoning is still why the current shape is what it is.
+What replaced the preflight is per-write: every condition that admitted a target
+is asked again of the live item immediately before writing to it.
 
-- **Analysis writes nothing.** The task fingerprints every `UserData` row before
-  and after each run and records both in the plan. If a change makes that proof
-  stop holding, the change is wrong, not the proof.
+Three properties are load-bearing and worth stating plainly:
+
+- **The run accounts for itself.** Every `UserData` row is fingerprinted before
+  and after, and every planned write is recorded with what became of it —
+  restored, skipped, failed, uncertain, or never attempted. A change that lets a
+  run mutate user data without leaving that record is wrong, however convenient.
+- **Uncertainty stops the run.** A write whose result cannot be established stops
+  the batch rather than being counted and stepped over. The stranded rows are
+  never modified, so nothing is lost by retrying tomorrow.
 - **An honest "cannot tell" beats a plausible guess.** A high no-match or
   ambiguity rate is a real result about a library, not a bug to be tuned away.
 

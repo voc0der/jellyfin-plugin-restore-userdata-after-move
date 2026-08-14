@@ -1,15 +1,16 @@
-# Live proof for the apply path
+# Live proof for the write path
 
 `gap.sh` is the answer to the one question the unit tests cannot reach: does the
 plugin actually put the data back, on a real Jellyfin server, through Jellyfin's
 own user-data manager?
 
 Everything below the HTTP boundary is covered by
-[`tests/`](../../tests) — matching, classification, plan hashing, preflight
-reconciliation, all of it, with no server in sight. What no amount of that can
-tell you is whether `IUserDataManager.SaveUserData` lands where the design says
-it lands, whether Jellyfin's key fan-out behaves, and whether the stranded rows
-survive the round trip. This script finds out.
+[`tests/`](../../tests) — matching, classification, plan hashing, per-write
+revalidation, where a run stops, all of it, with no server in sight. What no
+amount of that can tell you is whether `IUserDataManager.SaveUserData` lands
+where the design says it lands, whether Jellyfin's key fan-out behaves, whether
+the stranded rows survive the round trip, and whether the outcome the plan
+claims for a write is true of the database. This script finds out.
 
 ```sh
 scripts/gap/gap.sh                    # both server lines
@@ -23,7 +24,8 @@ Exit status is the result. Zero means every assertion held.
 
 For each server line it stands up a throwaway Jellyfin from the official
 tarball, builds a small library, strands its user data the way a path change
-strands it, installs this plugin, and runs the two scheduled tasks.
+strands it, installs this plugin, and runs its scheduled task — one task, which
+analyses and restores in the same pass.
 
 The fixture is three titles across two libraries that each span a hot and a cold
 root, with internet providers disabled so provider IDs come only from local NFO:
@@ -48,12 +50,16 @@ library that was never broken proves nothing.
 
 ## What it asserts
 
-- Both scheduled tasks register, and the analysis finds the stranded state
-  **with nothing configured**. No libraries selected, no path prefixes typed.
-- The analysis leaves `UserData` byte-for-byte unchanged.
-- Preflight **refuses** a plan whose preconditions moved, and a refused run is
-  all-or-nothing: not one of the other writes lands.
-- The apply restores each user's state on each title, field for field, matching
+- The scheduled task registers, ships with no trigger of its own, and finds the
+  stranded state **with nothing configured**. No libraries selected, no path
+  prefixes typed.
+- A run with nothing to restore leaves `UserData` byte-for-byte unchanged.
+- A target whose current state moved since the analysis is **left alone**, and
+  the run says which check declined it. The revalidation is per write, taken
+  from the live item moments before the save; there is no whole-plan preflight
+  to test, because there is no gap between planning and writing for one to
+  cover.
+- The run restores each user's state on each title, field for field, matching
   what the server held before the move — not what the harness posted.
 - The plan says what became of each of those writes, and says `restored` for the
   ones that are genuinely back. The unit tests can prove an outcome survives the
@@ -68,9 +74,9 @@ library that was never broken proves nothing.
   same count. The plugin reads them; it never consumes them.
 - The restored state survives a server restart.
 - A second run is a no-op: everything classifies `already_applied`, the plan
-  proposes zero writes, and applying again changes nothing.
+  proposes zero writes, and running again changes nothing.
 - A library scan afterwards completes, and the server logs nothing at error
-  level once the apply begins.
+  level once the run begins.
 
 ## One thing worth knowing before you extend it
 
