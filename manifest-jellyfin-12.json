@@ -6,8 +6,15 @@
     "description": "Finds played state, resume positions, favourites and ratings that Jellyfin stranded when a media path changed and restores them onto the item that holds that media now. One scheduled task, shipping with no trigger of its own: it stays inert until you add one under Dashboard, Scheduled Tasks, timed to land after whatever moves your files and the library scan that follows it. Repeat runs are no-ops, it never overwrites state you have since set, and the stranded rows are never modified or deleted.",
     "category": "General",
     "owner": "voc0der",
-    "imageUrl": "https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/icon.png",
     "versions": [
+      {
+        "version": "1.0.0.15",
+        "changelog": "## What's Changed\n\n- docs(sweep): acknowledge the field result instead of claiming there are none (2608f97)\n- docs(architecture): describe the one task that ships, not the two designed (810e7e2)\n- test(sweep): cover the 150-episode series-length point (899acd7)\n- fix(reporting): report what the run did, not what it wants you to do next (68f5b7e)\n- fix(plan): name match kinds and exclusions in the plan's own vocabulary (47554ec)\n- docs(design): say that the write loop records cancellation rather than throwing (1582264)\n- test(gap): prove the outcome record and the legacy-config migration on a server (dcfcfe7)\n- fix(catalogue): give Jellyfin 12 a repository that offers the 12 build (64c0ded)\n- ci(release): hold every pending release run instead of dropping the middle one (1c40250)\n- fix(metadata): stop promising a nightly run the task cannot perform (07de482)\n- fix(task): publish the run's record before letting cancellation out (40241a8)\n- fix(task): stop the batch at the first write that did not complete (e661a63)\n- fix(plan): record what became of each write instead of assuming it landed (a26db66)\n- fix(config): make Run now save the library selection before starting (8c52746)\n- fix(config): clear scope settings no version since 1.0.0.8 can edit (6274172)\n- fix(scope): refuse an unreadable library selection instead of widening it (f96bfdb)\n- fix(matching): require a retention stamp on both corroborating rows (f209ec0)\n- chore(release): update manifest.json for version 1.0.0.14 (6f514aa)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.14...1.0.0.15\n",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.15/RestoreUserDataAfterMove_1.0.0.15_jellyfin-12.0.0-rc5.zip",
+        "checksum": "44226906bfe34bbd403e6937fe6f848d",
+        "timestamp": "2026-08-14T13:20:44Z"
+      },
       {
         "version": "1.0.0.14",
         "changelog": "## What's Changed\n\n- refactor(task): make the row-existence query the last check before the save (08f37fa)\n- fix(revalidation): re-check key uniqueness before each write (cef36db)\n- fix(revalidation): read library membership from the item, not a map (a428b7d)\n- chore(release): update manifest.json for version 1.0.0.13 (198ce0e)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.13...1.0.0.14",
@@ -16,6 +23,7 @@
         "checksum": "eba46bc1a1b0d698885c1e23e4188767",
         "timestamp": "2026-08-13T23:51:38Z"
       }
-    ]
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/icon.png"
   }
 ]
