@@ -14,9 +14,17 @@ permissions:
 # when it runs rather than the commit that was built - which shipped a 1.0.0.4
 # whose archives predated the tag they were attached to. Queued, not cancelled:
 # every commit on main still gets its own release.
+#
+# All three keys are load-bearing. `cancel-in-progress: false` protects only the
+# run that is *executing*; the pending slot defaults to `queue: single`, which
+# cancels the waiting run to make room for a newer one. Under three quick merges
+# that silently drops the middle commit's release - not the workflow's stated
+# invariant, and invisible afterwards, because the run that vanished is the one
+# nobody goes looking for. `queue: max` holds up to 100 pending runs instead.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   build-and-release:

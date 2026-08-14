@@ -33,3 +33,10 @@ jobs:
 
     - name: Run tests
       run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Core.Tests/ --verbosity minimal
+
+    # The release workflow's one-release-per-commit invariant is three settings
+    # deep and every one of them fails silently: a dropped pending run leaves no
+    # release to notice the absence of. Assert them here rather than trust a
+    # comment nobody reads while editing the file it sits in.
+    - name: Check the release workflow still queues every commit
+      run: python3 .github/workflows/check-release-concurrency.py
