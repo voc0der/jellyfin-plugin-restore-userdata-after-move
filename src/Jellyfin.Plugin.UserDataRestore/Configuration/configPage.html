@@ -13,42 +13,23 @@
                 <h2 class="sectionTitle">Restore User Data After Move</h2>
                 <p class="fieldDescription">
                     When your files move, Jellyfin loses what you had watched. This finds that
-                    history and puts it back. It ships with no schedule of its own, so it does
-                    nothing at all until you press <strong>Run now</strong> below or give it a
-                    trigger.
+                    history and puts it back, in the libraries you tick here.
                 </p>
             </div>
 
             <form id="userDataRestoreConfigForm">
                 <div class="verticalSection">
-                    <div class="fieldDescription">Libraries to recover. None ticked means all of them.</div>
+                    <div class="fieldDescription">
+                        Libraries to recover. Nothing ticked means nothing runs.
+                    </div>
                     <div id="libraryList" style="margin-top:0.8em;"></div>
 
                     <button is="emby-button" type="submit" class="raised button-submit block" style="margin-top:1.5em;">
                         <span>Save</span>
                     </button>
+                    <div class="fieldDescription" id="saveStatus" style="margin-top:0.6em;"></div>
                 </div>
             </form>
-
-            <div class="verticalSection">
-                <button is="emby-button" type="button" id="runNow" class="raised block">
-                    <span>Run now</span>
-                </button>
-                <!-- Standing guidance and run status are deliberately separate
-                     elements. They used to share one, so pressing Run now wiped the
-                     only place in the UI that says this task has no schedule. -->
-                <div class="fieldDescription" style="margin-top:0.6em;">
-                    Run now saves the libraries ticked above before it starts, so the run always
-                    matches what is on screen.
-                </div>
-                <div class="fieldDescription" style="margin-top:0.6em;">
-                    This task has no schedule of its own. To run it regularly, add a trigger under
-                    Dashboard &rarr; Scheduled Tasks &rarr; Restore user data after move, timed to land
-                    after whatever moves your files and the library scan that follows it. Results
-                    appear on that same page.
-                </div>
-                <div class="fieldDescription" id="runStatus" style="margin-top:0.6em;"></div>
-            </div>
 
         </div>
     </div>
@@ -56,7 +37,6 @@
     <script type="text/javascript">
         (function () {
             var pluginId = '6b416775-6a90-436f-a034-796c52f5a317';
-            var taskKey = 'UserDataRestore';
             var page = document.querySelector('#userDataRestoreConfigPage');
 
             function renderLibraries(folders, selectedIds) {
@@ -96,9 +76,9 @@
                 });
             }
 
-            // Every one of these has a rejection handler because Dashboard's
-            // loading overlay is modal: a promise that only handles success leaves
-            // the page spinning forever with nothing on screen saying why.
+            // Both of these have a rejection handler because Dashboard's loading
+            // overlay is modal: a promise that only handles success leaves the page
+            // spinning forever with nothing on screen saying why.
             function load() {
                 Dashboard.showLoadingMsg();
 
@@ -115,86 +95,30 @@
                 });
             }
 
-            function failedToSave() {
-                Dashboard.hideLoadingMsg();
-                page.querySelector('#runStatus').textContent =
-                    'Could not save the settings. Nothing was changed.';
-            }
+            function save(event) {
+                event.preventDefault();
+                Dashboard.showLoadingMsg();
+                page.querySelector('#saveStatus').textContent = '';
 
-            // Resolves only once the server holds what is currently ticked. Both
-            // buttons go through this, because what is on screen is the only thing
-            // the reader believes they have chosen.
-            function persistSelection() {
-                return ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     config.EligibleLibraryIds = Array.prototype.map.call(
                         page.querySelectorAll('.libraryCheckbox:checked'),
                         function (input) { return input.getAttribute('data-libraryid'); });
 
                     return ApiClient.updatePluginConfiguration(pluginId, config);
-                });
-            }
-
-            function save(event) {
-                event.preventDefault();
-                Dashboard.showLoadingMsg();
-
-                persistSelection().then(function (result) {
+                }).then(function (result) {
                     Dashboard.processPluginConfigurationUpdateResult(result);
-                }, failedToSave);
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    page.querySelector('#saveStatus').textContent =
+                        'Could not save the settings. Nothing was changed.';
+                });
 
                 return false;
             }
 
-            function startTask(status) {
-                return ApiClient.getJSON(ApiClient.getUrl('ScheduledTasks')).then(function (tasks) {
-                    var task = (tasks || []).filter(function (candidate) {
-                        return candidate.Key === taskKey;
-                    })[0];
-
-                    if (!task) {
-                        status.textContent = 'Could not find the task. Restart Jellyfin and try again.';
-                        return;
-                    }
-
-                    ApiClient.ajax({
-                        type: 'POST',
-                        url: ApiClient.getUrl('ScheduledTasks/Running/' + task.Id)
-                    }).then(function () {
-                        status.textContent = 'Running. Results appear in Dashboard → Scheduled Tasks.';
-                    }, function () {
-                        status.textContent = 'Could not start the task.';
-                    });
-                }, function () {
-                    status.textContent = 'Could not reach the server.';
-                });
-            }
-
-            // Starting it from here is the whole point: nobody should have to be
-            // told to go find it under Scheduled Tasks to see whether it works.
-            //
-            // It saves first, unconditionally. The task reads its scope from the
-            // server, never from this page, so a box ticked but not saved would
-            // start a run against a scope nobody chose - whatever was saved last,
-            // or on a fresh install every movie and TV library on the server. Two
-            // buttons whose order silently decides what a mutating task writes to
-            // is not a thing to document; the fix is to remove the order.
-            function run() {
-                var status = page.querySelector('#runStatus');
-                status.textContent = 'Saving the library selection...';
-
-                persistSelection().then(function () {
-                    status.textContent = 'Starting...';
-                    startTask(status);
-                }, function () {
-                    status.textContent =
-                        'Could not save the library selection, so the task was not started. '
-                        + 'Nothing was changed and nothing ran.';
-                });
-            }
-
             page.addEventListener('pageshow', load);
             page.querySelector('#userDataRestoreConfigForm').addEventListener('submit', save);
-            page.querySelector('#runNow').addEventListener('click', run);
         })();
     </script>
 </div>

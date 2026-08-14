@@ -164,21 +164,24 @@ Building it yourself produces the same archives:
 
 ## Using it
 
-Installing it is almost the whole setup — it uses every movie and TV library,
-scoped to those libraries' own folders as the server reports them. The one thing
-left to you is *when*.
+Two things are left to you: *where*, and *when*.
 
-Go to **Dashboard → Scheduled Tasks → Restore user data after move**, and add a
-trigger timed to land after whatever moves your files and after the library scan
-that follows it. Daily at 3am is a fine answer if nothing else suggests one. If
-you would rather not wait, **Run now** is on the same page.
+The settings page exists for the first, and there is nothing else on it. Tick the
+movie and TV libraries you want recovered and press Save. Nothing is ticked on a
+fresh install and nothing ticked means nothing runs — this task writes to user
+data, so it writes only where you told it to. Everything else is read from the
+server: each ticked library is scoped to its own folders as the server reports
+them, so there is no path to type and nothing to get subtly wrong.
+
+For the second, go to **Dashboard → Scheduled Tasks → Restore user data after
+move**, and add a trigger timed to land after whatever moves your files and after
+the library scan that follows it. Daily at 3am is a fine answer if nothing else
+suggests one. That page is also where you run it by hand and where its results
+appear.
 
 An over-frequent trigger costs nothing but log lines — repeat runs are no-ops —
 so err towards later rather than tighter. A run that fires mid-move reports
 everything as ambiguous and does nothing useful; the next one catches it.
-
-The settings page exists for one thing: ticking specific libraries, if you want
-fewer than all of them. There is nothing else on it.
 
 Results appear in the task's summary and the server log; the full detail is in a
 plan file under `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
