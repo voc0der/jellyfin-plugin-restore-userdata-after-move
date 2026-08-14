@@ -114,18 +114,29 @@ jobs:
       run: |
         VERSION="${{ steps.version.outputs.version }}"
 
+        REPO="${{ github.repository }}"
+        RAW="https://raw.githubusercontent.com/${REPO}/main"
+
+        # Both server lines have a catalogue of their own. Saying otherwise here
+        # would send 12.0 operators to a manual install and out of the update
+        # path the per-line manifests exist to give them.
         {
           cat CHANGELOG.md
           echo ""
-          echo "## Which archive do I want?"
+          echo "## Which build do I want?"
           echo ""
-          echo "| Jellyfin | Archive |"
-          echo "|---|---|"
-          echo "| 10.11.11 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip\` — also available in the plugin catalogue |"
-          echo "| 12.0 RC5 | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0-rc5.zip\` — manual install |"
+          echo "Add the repository matching your server under Dashboard → Plugins → Repositories:"
           echo ""
-          echo "Builds are pinned per server version and the plugin refuses to run on"
-          echo "the wrong one, so pick the archive matching your exact server."
+          echo "| Jellyfin | Plugin repository | Archive, to install by hand instead |"
+          echo "|---|---|---|"
+          echo "| 10.11.11 | \`${RAW}/manifest.json\` | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip\` |"
+          echo "| 12.0 RC5 | \`${RAW}/manifest-jellyfin-12.json\` | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0-rc5.zip\` |"
+          echo ""
+          echo "**Add exactly one.** Jellyfin treats \`targetAbi\` as a minimum rather than a"
+          echo "match, so a 12.0 server considers the 10.11 build installable and will offer"
+          echo "it; adding both repositories merges them by plugin ID. Builds are pinned per"
+          echo "server version and the plugin refuses to run on the wrong one, so a mistake"
+          echo "is loud rather than silent — but it is still a mistake worth avoiding."
         } > RELEASE_NOTES.md
 
         # --target pins the tag to the commit these artifacts were built from.
