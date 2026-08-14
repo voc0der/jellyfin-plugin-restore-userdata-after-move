@@ -558,6 +558,26 @@ public class RestoreUserDataTask : IScheduledTask
             return new WriteResult(write, WriteOutcome.Skipped, disqualification);
         }
 
+        // Uniqueness again, now, against the catalogue as it is rather than as it
+        // was at the top of the loop. The index above is a full pass over every
+        // movie and episode and can only be afforded once per run, which leaves
+        // drift inside the loop uncovered — a metadata refresh giving a second
+        // item this key needs no library scan and so trips none of the guards
+        // that abandon the batch. This asks the same question about this one
+        // item, from an index built over the handful of items that could
+        // plausibly collide with it.
+        var contenders = KeyOwnership.Build([snapshot, .. collector.FindKeyContenders(item, cancellationToken)]);
+        if (TargetRevalidation.Evaluate(snapshot, options, write.SourceKeys, contenders) is { } contested)
+        {
+            _logger.LogWarning(
+                "Item {ItemId} stopped being the only item answering to the keys that identified it for user {UserId} ({Reason}); skipping. "
+                + "Something re-identified an item during this run. The stranded row is untouched, so the next run reconsiders it.",
+                write.ItemId,
+                write.UserId,
+                contested);
+            return new WriteResult(write, WriteOutcome.Skipped, contested);
+        }
+
         // Cheap second opinion through the manager, which sees state the database
         // read below cannot contradict but may have cached differently.
         if (!writer.Read(user, item).IsDefault)

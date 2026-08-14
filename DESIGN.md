@@ -726,15 +726,24 @@ delete the currently armed plan.
 > each write, and a scan starting mid-run abandons the rest of the batch.
 >
 > Check 7's *uniqueness* clause is the one thing that cannot be answered from the
-> live item, because it is a property of the whole catalogue: no amount of looking
-> at a target reveals that a second item has started reporting its key.  So it is
-> re-established once at the start of the apply pass, from a `KeyOwnership` index
-> built over every current movie and episode, and each write is checked against
-> that (§9.2 step 4).  Once per run rather than once per write is a deliberate
-> cost decision — establishing it is a full catalogue pass — and it leaves drift
-> *inside* the write loop uncovered.  What moves keys in bulk is a scan or a
-> refresh, and check 3 covers those: the run refuses to start during a scan and
-> abandons the remaining writes if one begins.
+> live item alone, because it is a property of the whole catalogue: no amount of
+> looking at a target reveals that a second item has started reporting its key.
+> It is answered twice, and a write must satisfy both (§9.2 steps 4 and 5).
+>
+> Once per run, from a `KeyOwnership` index built over every current movie and
+> episode.  That is a full catalogue pass, affordable once and not once per
+> write, and on its own it leaves drift *inside* the write loop uncovered — a
+> metadata refresh giving a second item this key needs no library scan, so it
+> trips none of the guards that abandon the batch.
+>
+> And again immediately before each write, over a narrowed set: the items that
+> could plausibly collide with this one target, found by an indexed provider-ID
+> lookup rather than a scan.  The lookup only *narrows*; every item it returns is
+> then asked for its own `GetUserDataKeys()`, which is what decides.  Returning
+> too much therefore costs a few comparisons and changes no verdict, and
+> returning too little leaves exactly the gap the run-level index already
+> covers — so the second check can only ever make a run more conservative, never
+> less.  Both must pass.
 >
 > The rest of this section records what was designed.
 
@@ -776,28 +785,31 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
    membership, which is asked of the item's own ancestors rather than looked up in
    a map built earlier in the run: checking a target against the same photograph
    that admitted it checks nothing.
-4. Revalidate *uniqueness* — that the target is still the only current item
-   reporting each of those keys — against the `KeyOwnership` index built at the
-   start of the apply pass.  Unlike step 3 this is catalogue-wide, so it is
-   established once per run and not once per write; see §9.1.
-5. Check current state through `IUserDataManager`, and skip anything not at
+4. Revalidate *uniqueness* against the `KeyOwnership` index built at the start of
+   the apply pass.  Catalogue-wide, so it is established once per run rather than
+   once per write; see §9.1.
+5. Revalidate uniqueness *again*, now, against an index built over the items that
+   could plausibly share this target's keys — found by provider-ID lookup and then
+   judged on the keys they actually report.  This is what covers a re-identification
+   landing during the write loop, which no library scan need accompany.
+6. Check current state through `IUserDataManager`, and skip anything not at
    defaults.
-6. Re-query `UserData` row *existence* for the exact pair, against the database
+7. Re-query `UserData` row *existence* for the exact pair, against the database
    rather than through `IUserDataManager`.  The manager reports "no row" and "a
    row holding defaults" identically, and the difference between them is the
    difference between an item nobody has touched and an item somebody has just
    deliberately cleared.  Any row at all: skip.  This is the last check before the
    save, and deliberately so — it is the authoritative one, so nothing belongs
    between it and the write it guards.
-7. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
-8. Call `IUserDataManager.SaveUserData(user, item, dto,
+8. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
+9. Call `IUserDataManager.SaveUserData(user, item, dto,
    UserDataSaveReason.UpdateUserData)`.
-9. Re-read through `IUserDataManager` and verify the six semantic fields.
-10. Query the current item's rows and verify that Jellyfin wrote the expected
+10. Re-read through `IUserDataManager` and verify the six semantic fields.
+11. Query the current item's rows and verify that Jellyfin wrote the expected
     current keys with the recovered state.
-11. Append and flush the ledger record for this write, before the next write is
+12. Append and flush the ledger record for this write, before the next write is
     attempted (§8.1).
-12. Report progress.
+13. Report progress.
 
 Using the partial-update DTO preserves current audio/subtitle selections.  V1
 does not restore the detached stream indexes because they are positional and may

@@ -159,6 +159,100 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
         return KeyOwnership.Build(snapshots);
     }
 
+    /// <summary>
+    /// Finds the current items that could plausibly report the same keys as one
+    /// target, right now.
+    /// </summary>
+    /// <param name="item">The target, freshly read from the library manager.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Snapshots of the contenders, never including the target itself.</returns>
+    /// <remarks>
+    /// <para>Uniqueness is the one condition behind a write that is a property of
+    /// the whole catalogue: no amount of looking at the target reveals that a
+    /// second item has started answering to its key.
+    /// <see cref="BuildKeyOwnership"/> settles that for a whole run in one pass,
+    /// which is affordable once and not once per write — so this exists to ask
+    /// the same question about one item, immediately before writing to it, at the
+    /// cost of an indexed lookup instead of a full catalogue scan.</para>
+    /// <para><b>The provider query narrows; it does not judge.</b> That
+    /// separation is the whole design. Jellyfin builds user-data keys from
+    /// provider IDs, but this class refuses to know how, so the query is used
+    /// only to produce a short list of items that might collide — and every one
+    /// of them is then asked for its own <c>GetUserDataKeys()</c>, which is what
+    /// actually decides. A query that returns too much costs a few key
+    /// comparisons and changes no verdict. A query that returns too little leaves
+    /// exactly the gap the run-level index already covers, so a write must still
+    /// satisfy both and this can only ever make a run more conservative, never
+    /// less.</para>
+    /// <para>An episode is asked about twice over. Its own provider IDs are
+    /// usually empty and its keys come from its series, so a second series
+    /// carrying the same IMDb or TMDb ID makes every one of its episodes a
+    /// contender.</para>
+    /// </remarks>
+    public IReadOnlyList<CurrentItemSnapshot> FindKeyContenders(BaseItem item, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        var contenders = new Dictionary<Guid, BaseItem>();
+
+        foreach (var candidate in ItemsSharingProviderIds(item.ProviderIds, [item.Id]))
+        {
+            contenders[candidate.Id] = candidate;
+        }
+
+        if (item is Episode { SeriesId: { } seriesId } && _libraryManager.GetItemById(seriesId) is { } series)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            foreach (var rival in ItemsSharingProviderIds(series.ProviderIds, [seriesId]))
+            {
+                foreach (var candidate in EpisodesOf(rival.Id))
+                {
+                    if (!candidate.Id.Equals(item.Id))
+                    {
+                        contenders[candidate.Id] = candidate;
+                    }
+                }
+            }
+        }
+
+        var membership = new Dictionary<Guid, List<Guid>>();
+        var seriesProviderIds = new Dictionary<Guid, Dictionary<string, string>>();
+
+        return [.. contenders.Values.Select(candidate =>
+            ToSnapshot(candidate, membership, seriesProviderIds, checkPathExists: false))];
+    }
+
+    private IReadOnlyList<BaseItem> ItemsSharingProviderIds(
+        IReadOnlyDictionary<string, string>? providerIds,
+        IReadOnlyList<Guid> exclude)
+    {
+        // Nothing to narrow by. The run-level index remains the only answer for
+        // this item, which is what it was before this check existed.
+        if (providerIds is null || providerIds.Count == 0)
+        {
+            return [];
+        }
+
+        return _libraryManager.GetItemList(new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.Series],
+            Recursive = true,
+            HasAnyProviderId = providerIds.ToDictionary(StringComparer.OrdinalIgnoreCase),
+            ExcludeItemIds = [.. exclude],
+            DtoOptions = ItemFieldsNeeded,
+        });
+    }
+
+    private IReadOnlyList<BaseItem> EpisodesOf(Guid seriesId) =>
+        _libraryManager.GetItemList(new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Episode],
+            Recursive = true,
+            AncestorIds = [seriesId],
+            DtoOptions = ItemFieldsNeeded,
+        });
+
     private Dictionary<Guid, List<Guid>> BuildMembership(
         IReadOnlyList<Guid> configuredLibraryIds,
         CancellationToken cancellationToken)

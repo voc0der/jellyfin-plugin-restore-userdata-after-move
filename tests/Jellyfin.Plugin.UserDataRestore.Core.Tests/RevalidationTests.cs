@@ -249,6 +249,66 @@ public class RevalidationTests
     }
 
     [Fact]
+    public void AnIndexOverJustTheTargetAdmitsIt()
+    {
+        // The safety property behind the per-write uniqueness check. It is built
+        // from a narrowed set of contenders, and when the narrowing finds none —
+        // an item with no provider IDs to look them up by, a server that answers
+        // the query differently than expected — the index holds only the target.
+        // That must read as "nobody else claims these keys", not as a rejection,
+        // or the check would silently stop a run from restoring anything.
+        var movie = Scenario.Movie(MovieId);
+
+        Assert.Null(TargetRevalidation.Evaluate(
+            movie, Scenario.Options(), ["tt0133093", "603"], Scenario.Ownership(movie)));
+    }
+
+    [Fact]
+    public void AContenderSharingOneKeyIsEnoughToStopTheWrite()
+    {
+        // A metadata refresh during the run gives a second item the same IMDb ID.
+        // No library scan is involved, so nothing else in the write path notices.
+        var target = Scenario.Movie(MovieId);
+        var arrival = Scenario.Movie(OtherMovieId, path: "/data/library/movies/Test Movie (2020) [2]/movie.mkv");
+
+        var verdict = TargetRevalidation.Evaluate(
+            target, Scenario.Options(), ["tt0133093"], Scenario.Ownership(target, arrival));
+
+        Assert.NotNull(verdict);
+        Assert.StartsWith(TargetRevalidation.KeyNoLongerUnique, verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AContenderSharingNoKeysChangesNothing()
+    {
+        // The narrowing query is allowed to over-return: what decides is the keys
+        // the contenders actually report, so an unrelated item costs a comparison
+        // and no verdict.
+        var target = Scenario.Movie(MovieId);
+        var unrelated = Scenario.Movie(OtherMovieId, imdb: "tt7654321", tmdb: "999");
+
+        Assert.Null(TargetRevalidation.Evaluate(
+            target, Scenario.Options(), ["tt0133093"], Scenario.Ownership(target, unrelated)));
+    }
+
+    [Fact]
+    public void AnEpisodeIsContestedByAnotherSeriesCarryingItsSeriesKey()
+    {
+        // Why episodes are looked up twice over: an episode's own provider IDs are
+        // usually empty and its keys come from its series, so the duplicate that
+        // matters is a second series with the same IMDb ID.
+        var target = Scenario.Episode(EpisodeId, SeriesId);
+        var rival = Scenario.Episode(new Guid("6d1e5aa0-0000-0000-0000-0000000000ff"), SeriesId);
+
+        var key = Assert.Single(target.UserDataKeys, k => k.StartsWith("tt", StringComparison.Ordinal));
+        var verdict = TargetRevalidation.Evaluate(
+            target, Scenario.Options(), [key], Scenario.Ownership(target, rival));
+
+        Assert.NotNull(verdict);
+        Assert.StartsWith(TargetRevalidation.KeyNoLongerUnique, verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OwnershipIndexesEveryItemItIsGivenAndNothingElse()
     {
         var ownership = Scenario.Ownership(Scenario.Movie(MovieId), Scenario.Episode(EpisodeId, SeriesId));
