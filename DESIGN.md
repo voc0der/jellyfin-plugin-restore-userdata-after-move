@@ -734,8 +734,10 @@ hundreds of writes have already occurred.
 For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
 
 1. Resolve the user and current item again.
-2. Check cancellation, and abandon the remaining writes if a library scan has
-   started since the run began.
+2. Check cancellation, and abandon the remaining writes if it has arrived or if a
+   library scan has started since the run began.  Both are recorded on the
+   abandoned writes and returned; neither is thrown from the loop, because
+   everything that records what the loop already did runs after it (§9.3).
 3. Revalidate the target against the conditions that admitted it, from a snapshot
    of the item taken now: kind, virtual/extra status, path, path existence,
    library membership, final-path prefix, and — the identity itself — that it
