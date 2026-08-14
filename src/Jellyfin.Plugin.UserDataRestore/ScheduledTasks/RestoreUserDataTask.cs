@@ -165,7 +165,13 @@ public class RestoreUserDataTask : IScheduledTask
         var outcomes = await ApplyAsync(result.Writes, options, reader, progress, cancellationToken).ConfigureAwait(false);
         progress.Report(95);
 
-        var fingerprintAfter = await TryFingerprintAsync(reader, cancellationToken).ConfigureAwait(false);
+        // Everything from here describes writes that have already landed, so none
+        // of it takes the run's token. A cancellation arriving mid-run has done
+        // its job by stopping the writes; letting it also stop the record of them
+        // would leave user data changed with nothing saying what changed it, which
+        // is the one outcome this whole ordering exists to prevent. The
+        // cancellation is rethrown below, once the artifact is on disk.
+        var fingerprintAfter = await TryFingerprintAsync(reader, CancellationToken.None).ConfigureAwait(false);
 
         // Ordered so the counts reach the log either way. The plan is written after
         // the writes, because it records what they did, which means a plan that
@@ -189,6 +195,19 @@ public class RestoreUserDataTask : IScheduledTask
                     CultureInfo.InvariantCulture,
                     $"This run stopped at a restore that did not complete: {stoppedBy}. {CountOf(outcomes, WriteOutcome.Restored)} of {result.Writes.Count} restores had completed and {CountOf(outcomes, WriteOutcome.NotAttempted)} were not attempted. The stranded rows are untouched; the next run plans them again."),
                 planFailure);
+        }
+
+        // Last, so the plan above exists first. Jellyfin reports this as a
+        // cancelled task rather than a failed one, which is what it was.
+        if (ApplySequence.WasCancelled(outcomes))
+        {
+            var message = string.Create(
+                CultureInfo.InvariantCulture,
+                $"Cancelled after {CountOf(outcomes, WriteOutcome.Restored)} of {result.Writes.Count} restores. The plan for this run records every one of them; the rest were not attempted and the next run plans them again.");
+
+            throw planFailure is null
+                ? new OperationCanceledException(message, cancellationToken)
+                : new OperationCanceledException(message, planFailure, cancellationToken);
         }
 
         if (planFailure is not null)
@@ -397,10 +416,13 @@ public class RestoreUserDataTask : IScheduledTask
                 writer, reader, collector, write, options, ownership, () => saveEntered = true, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             if (saveEntered)
             {
+                // Cancellation included. Once the save has been entered the run
+                // owes an answer about this item, and "the operator pressed stop"
+                // is not one - the write may already have committed.
                 _logger.LogError(
                     ex,
                     "Restoring user {UserId} item {ItemId} threw during the save. Whether it landed is unknown - the save can throw "
@@ -408,6 +430,11 @@ public class RestoreUserDataTask : IScheduledTask
                     write.UserId,
                     write.ItemId);
                 return new WriteResult(write, WriteOutcome.Uncertain, "save_threw");
+            }
+
+            if (ex is OperationCanceledException)
+            {
+                throw;
             }
 
             _logger.LogError(

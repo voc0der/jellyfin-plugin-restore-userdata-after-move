@@ -778,9 +778,22 @@ values make retries idempotent.
 ### 9.3 Failure behavior
 
 - Cancellation stops before the next item and reports a canceled partial run.
+  It is *recorded* rather than thrown: the remaining writes are marked
+  `not_attempted` with reason `cancelled`, the closing fingerprint and the plan
+  are written, and only then is the cancellation rethrown.  Cancellation arriving
+  after a write has landed is the ordinary case — somebody presses stop in
+  Scheduled Tasks — and it must not carry the run past the artifact that says
+  what landed.  Cancellation reaching a write that has already entered the save
+  reports `uncertain`, because once the save is entered "the operator pressed
+  stop" is not an answer about that item.
 - A save exception, failed verification, or exception thrown by any of the
   per-write guards stops the run at that write.  The remaining writes are
   recorded `not_attempted` and the plan is still published.
+- Everything after the last write runs on an uncancellable token, and the two
+  steps that can still fail — the closing fingerprint and the plan write — are
+  each caught rather than allowed to escape.  A run that has mutated user data
+  publishes a record of it or says in the log why it could not; it does not
+  silently do neither.
 - A ledger failure after a successful save does not roll the user state back.
   The next analysis detects semantic equality and reports `already_applied`.
 - There is deliberately no transaction spanning multiple titles or users.

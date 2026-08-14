@@ -124,10 +124,82 @@ public class ApplySequenceTests
         Assert.All(run.Results, result => Assert.Equal(WriteOutcome.NotAttempted, result.Outcome));
     }
 
+    [Fact]
+    public async Task CancellationAfterASuccessfulWriteReturnsRatherThanThrowing()
+    {
+        // The regression this exists for: cancellation escaped the loop, so it
+        // escaped ExecuteAsync too - past the closing fingerprint and past the
+        // plan. A run stopped from Scheduled Tasks left restored state behind with
+        // no artifact recording that it had ever run.
+        using var cancellation = new CancellationTokenSource();
+
+        var run = await RunAsync(
+            3,
+            index =>
+            {
+                if (index == 0)
+                {
+                    cancellation.Cancel();
+                }
+
+                return WriteOutcome.Restored;
+            },
+            cancellationToken: cancellation.Token);
+
+        Assert.Equal([0], run.Attempted);
+        Assert.Equal(
+            [WriteOutcome.Restored, WriteOutcome.NotAttempted, WriteOutcome.NotAttempted],
+            run.Results.Select(result => result.Outcome));
+        Assert.True(ApplySequence.WasCancelled(run.Results));
+    }
+
+    [Fact]
+    public async Task CancellationReachingTheWriteItselfLeavesThatWriteUnattempted()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        var writes = Enumerable.Range(0, 2).Select(Write).ToArray();
+        var attempted = 0;
+
+        var results = await ApplySequence.RunAsync(
+            writes,
+            (_, token) =>
+            {
+                attempted++;
+                token.ThrowIfCancellationRequested();
+                throw new InvalidOperationException("unreachable");
+            },
+            () => false,
+            _ => { },
+            cancellation.Token);
+
+        Assert.Equal(0, attempted);
+        Assert.All(results, result => Assert.Equal(WriteOutcome.NotAttempted, result.Outcome));
+        Assert.True(ApplySequence.WasCancelled(results));
+    }
+
+    [Fact]
+    public async Task ARunThatFinishedWasNotCancelled()
+    {
+        var run = await RunAsync(2, _ => WriteOutcome.Restored);
+
+        Assert.False(ApplySequence.WasCancelled(run.Results));
+    }
+
+    [Fact]
+    public async Task AbandoningForAScanIsNotReportedAsCancellation()
+    {
+        var run = await RunAsync(2, _ => WriteOutcome.Restored, libraryScanIsRunning: () => true);
+
+        Assert.False(ApplySequence.WasCancelled(run.Results));
+    }
+
     private static async Task<SequenceRun> RunAsync(
         int count,
         Func<int, WriteOutcome> outcomeAt,
-        Func<bool>? libraryScanIsRunning = null)
+        Func<bool>? libraryScanIsRunning = null,
+        CancellationToken cancellationToken = default)
     {
         var writes = Enumerable.Range(0, count).Select(Write).ToArray();
         var attempted = new List<int>();
@@ -143,7 +215,7 @@ public class ApplySequenceTests
             },
             libraryScanIsRunning ?? (() => false),
             progress.Add,
-            CancellationToken.None);
+            cancellationToken);
 
         return new SequenceRun(writes, results, attempted, progress);
     }

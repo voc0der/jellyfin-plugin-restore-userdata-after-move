@@ -25,6 +25,23 @@ public static class ApplySequence
     /// <summary>Detail prefix recorded when an earlier write ended badly.</summary>
     public const string StoppedAfter = "stopped_after_";
 
+    /// <summary>Detail recorded when the run was cancelled.</summary>
+    public const string Cancelled = "cancelled";
+
+    /// <summary>
+    /// Whether a run ended because it was cancelled.
+    /// </summary>
+    /// <param name="results">The results of the run.</param>
+    /// <returns><see langword="true"/> when cancellation is what stopped it.</returns>
+    public static bool WasCancelled(IReadOnlyList<WriteResult> results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+
+        return results.Any(result =>
+            result.Outcome == WriteOutcome.NotAttempted
+            && string.Equals(result.Detail, Cancelled, StringComparison.Ordinal));
+    }
+
     /// <summary>
     /// Attempts each write in order, stopping at the first that ends
     /// <see cref="WriteOutcome.Failed"/> or <see cref="WriteOutcome.Uncertain"/>.
@@ -60,7 +77,16 @@ public static class ApplySequence
 
         for (var index = 0; index < writes.Count; index++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            // Recorded and returned, not thrown. Cancellation arriving after a
+            // write has landed is the ordinary case — somebody presses stop in
+            // Scheduled Tasks — and letting it escape from here would carry the
+            // run past the plan and leave user data changed with no artifact
+            // saying what changed it. The caller rethrows once that record exists.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                Abandon(results, writes, index, Cancelled);
+                break;
+            }
 
             // The run refused to start during a scan; one can still begin here. A
             // scan invalidates every remaining target at once — items are being
@@ -72,7 +98,21 @@ public static class ApplySequence
                 break;
             }
 
-            var result = await attemptAsync(writes[index], cancellationToken).ConfigureAwait(false);
+            WriteResult result;
+            try
+            {
+                result = await attemptAsync(writes[index], cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancellation reaching the attempt itself. Only the checks before
+                // the save take the token, so this write is untouched too; an
+                // attempt that had reached the save reports Uncertain rather than
+                // throwing.
+                Abandon(results, writes, index, Cancelled);
+                break;
+            }
+
             results.Add(result);
             completed(index + 1);
 
