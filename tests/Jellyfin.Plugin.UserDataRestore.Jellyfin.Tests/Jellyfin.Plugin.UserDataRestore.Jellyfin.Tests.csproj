@@ -37,6 +37,14 @@
          10.11.11 itself ships. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.11" />
 
+    <!-- Pinned past the native SQLite build EF's own dependency drags in, which
+         carries a high-severity advisory. The sibling database project has
+         carried this pin since it was created; this one was left without it and
+         raised the advisory on its own. It never reaches an archive — build.sh
+         refuses to package anything but this plugin's two assemblies — but a
+         known-vulnerable transitive dependency in the build output is not
+         something to leave for a scanner to find later. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>
 
   <ItemGroup>
