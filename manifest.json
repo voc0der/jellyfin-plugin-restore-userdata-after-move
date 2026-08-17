@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.19",
+        "changelog": "## What's Changed\n\n- fix(catalogue): withdraw the mismatched 1.0.0.4 entry and audit the rest (a70628f)\n- test(gap): tick the harness's libraries, and keep its state out of Bash's (ba7f5ca)\n- test(jellyfin): cover the adapter against real Jellyfin entities (caa89ba)\n- perf(scope): stop stat-ing media outside the selected libraries (854353f)\n- fix(scope): refuse a run whose selected library has gone (dcec603)\n- fix(apply): re-check the stranded rows before each restore (5056f99)\n- fix(revalidation): look for same-series siblings before each write (a1c5971)\n- fix(analysis): refuse one stranded snapshot resolving to two episodes (036d680)\n- chore(release): update the plugin catalogues for version 1.0.0.18 (36e6e44)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.18...1.0.0.19\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.19/RestoreUserDataAfterMove_1.0.0.19_jellyfin-10.11.11.zip",
+        "checksum": "7f1f34a6b8b520803c916294385ef300",
+        "timestamp": "2026-08-17T01:23:24Z"
+      },
+      {
         "version": "1.0.0.18",
         "changelog": "## What's Changed\n\n- docs(update): warn that an untouched install now has no scope (7214f2f)\n- chore(release): update the plugin catalogues for version 1.0.0.17 (9693205)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.17...1.0.0.18\n",
         "targetAbi": "10.11.11.0",
