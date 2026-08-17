@@ -155,6 +155,16 @@ public static class DetachedUserDataAnalyzer
             pending.Add(group);
         }
 
+        foreach (var contradicted in FindDivergentEpisodeAttribution(pending))
+        {
+            pending.Remove(contradicted);
+            resolved.Add(Resolve(
+                contradicted,
+                ReasonCode.AmbiguousSourceAttribution,
+                contradicted.State,
+                contradicted.EvidenceRule));
+        }
+
         var diagnostics = new AnalysisDiagnostics
         {
             DetachedRowsInspected = input.DetachedRows.Count,
@@ -252,6 +262,72 @@ public static class DetachedUserDataAnalyzer
             CandidateCounts = Tally(allCandidates.Select(c => c.Reason)),
             Diagnostics = candidates.Diagnostics,
         };
+    }
+
+    /// <summary>
+    /// Finds candidates whose evidence contradicts another candidate's, across the
+    /// grouping boundary (DESIGN §7.4).
+    /// </summary>
+    /// <remarks>
+    /// <para>Jellyfin writes one save under every key the item reported, so a
+    /// single episode's stranded state arrives as several rows differing only in
+    /// their key: the episode's own IMDb ID, the series' IMDb ID with
+    /// <c>SSSEEE</c> appended, the item GUID. They are meant to converge on one
+    /// current item.</para>
+    /// <para>When they do not — the episode-level key resolving uniquely to
+    /// episode A while the series-derived one resolves uniquely to episode B —
+    /// nothing downstream notices. Each group passes the IMDb rule on its own
+    /// merits, and the duplicate-key guard cannot fire because A and B share no
+    /// raw key. Grouping by <c>(user, target)</c> is what hides it: the
+    /// contradiction lives between two groups rather than inside either, and the
+    /// result is one old snapshot copied onto two current episodes.</para>
+    /// <para>Deliberately narrow. A batch deletion stamps a whole library's rows
+    /// with one retention date, so identical payloads are not on their own
+    /// evidence that two rows described one item — clustering on that would refuse
+    /// entire recoveries. What distinguishes this shape is that each side is
+    /// <i>missing</i> the key the other has. An episode whose own IMDb key and
+    /// series-derived key both point at it produces one complete group, not two
+    /// half ones; two episodes deleted in the same sweep each keep both halves,
+    /// however alike their state. A group carrying the current item's own GUID is
+    /// left out entirely: that key is item identity itself, so a row bearing it is
+    /// not a row whose attribution is in doubt.</para>
+    /// </remarks>
+    private static IReadOnlyList<GroupDraft> FindDivergentEpisodeAttribution(IReadOnlyList<GroupDraft> pending)
+    {
+        var contradicted = new List<GroupDraft>();
+
+        foreach (var byUser in pending.GroupBy(group => group.UserId))
+        {
+            var ownKeyOnly = byUser.Where(group => Carries(group, KeyEvidence.Imdb, KeyEvidence.SeriesImdbEpisode)).ToArray();
+            var seriesKeyOnly = byUser.Where(group => Carries(group, KeyEvidence.SeriesImdbEpisode, KeyEvidence.Imdb)).ToArray();
+
+            foreach (var own in ownKeyOnly)
+            {
+                foreach (var series in seriesKeyOnly)
+                {
+                    if (own.Target.ItemId.Equals(series.Target.ItemId) || !SharesAPayload(own, series))
+                    {
+                        continue;
+                    }
+
+                    contradicted.Add(own);
+                    contradicted.Add(series);
+                }
+            }
+        }
+
+        return [.. contradicted.Distinct()];
+    }
+
+    private static bool Carries(GroupDraft group, KeyEvidence required, KeyEvidence disqualifying) =>
+        group.Target.Kind == ItemKind.Episode
+        && group.Keys.Any(key => key.Evidence == required)
+        && !group.Keys.Any(key => key.Evidence == disqualifying || key.Evidence == KeyEvidence.CurrentItemGuid);
+
+    private static bool SharesAPayload(GroupDraft left, GroupDraft right)
+    {
+        var payloads = left.Keys.Select(key => key.Row.PayloadFingerprint).ToHashSet(StringComparer.Ordinal);
+        return right.Keys.Any(key => payloads.Contains(key.Row.PayloadFingerprint));
     }
 
     private static CandidateRecord Resolve(

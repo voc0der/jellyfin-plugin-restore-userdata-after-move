@@ -597,6 +597,38 @@ Rating == null
 Negative counts, negative positions, ratings outside 0–10, malformed dates, or
 missing keys are `invalid_source_state`.
 
+**One snapshot must not resolve to two items.**  Grouping by
+`(UserId, TargetItemId)` is what makes the collapse above possible, and it is
+also a place a contradiction can hide.  Jellyfin writes one save under every key
+the item reported, so a single episode's stranded state arrives as several rows
+differing only in `CustomDataKey`: the episode's own IMDb ID, the series' IMDb
+ID with `SSSEEE` appended, the item GUID.  Those keys are meant to converge.
+When complementary metadata after a move sends the episode-level key uniquely to
+episode A and the series-derived key uniquely to episode B, two groups form,
+each satisfies the IMDb case of §7.3 on its own, and the duplicate-key guard
+never fires because A and B share no raw key.  The result is one old snapshot
+copied onto two current episodes — a contradiction concealed by the grouping
+boundary rather than caught by it.
+
+So a narrow cross-candidate check runs after grouping: two candidates for the
+same user, both episodes, on different items, where one carries an
+episode-level IMDb key and no series-derived one and the other carries a
+series-derived IMDb key and no episode-level one, and some row in each is
+identical to a row in the other in every field but the key.  Both are classified
+`ambiguous_source_attribution` and neither is written.
+
+The narrowness is the point.  A batch deletion stamps a whole library's rows
+with one `RetentionDate`, and "played once, never resumed, no rating" is what
+most rows look like, so identical payloads are not on their own evidence that
+two rows described one item; clustering on that would refuse entire legitimate
+recoveries.  What distinguishes the contradictory shape is that each side is
+*missing* the key the other has.  A genuine fan-out arrives whole — an episode
+whose own IMDb key and series-derived key both point at it produces one complete
+group, not two half ones — and two episodes deleted in the same sweep each keep
+both halves however alike their state.  A group carrying the current item's own
+GUID is excluded outright: that key is item identity itself, so a row bearing it
+is not a row whose attribution is in doubt.
+
 ### 7.5 Inspect the current target
 
 Query current `UserData` rows for candidate `(UserId, ItemId)` pairs in batches.
@@ -625,6 +657,7 @@ Every detached row or collapsed candidate ends in one explicit category:
 - `unknown_user`
 - `no_current_key_match`
 - `ambiguous_current_key`
+- `ambiguous_source_attribution`
 - `unsupported_current_item`
 - `path_outside_final_scope`
 - `insufficient_identity_evidence`

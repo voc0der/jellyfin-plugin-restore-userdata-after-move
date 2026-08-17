@@ -25,6 +25,12 @@ public enum ReasonCode
     /// <summary>More than one current item reports this key.</summary>
     AmbiguousCurrentKey,
 
+    /// <summary>
+    /// One stranded snapshot's keys point at two different current items, so
+    /// there is no one item it can be said to have belonged to.
+    /// </summary>
+    AmbiguousSourceAttribution,
+
     /// <summary>The only current item reporting this key is not a supported recovery target.</summary>
     UnsupportedCurrentItem,
 
@@ -61,6 +67,7 @@ public static class ReasonCodes
         [ReasonCode.UnknownUser] = "unknown_user",
         [ReasonCode.NoCurrentKeyMatch] = "no_current_key_match",
         [ReasonCode.AmbiguousCurrentKey] = "ambiguous_current_key",
+        [ReasonCode.AmbiguousSourceAttribution] = "ambiguous_source_attribution",
         [ReasonCode.UnsupportedCurrentItem] = "unsupported_current_item",
         [ReasonCode.PathOutsideFinalScope] = "path_outside_final_scope",
         [ReasonCode.InsufficientIdentityEvidence] = "insufficient_identity_evidence",

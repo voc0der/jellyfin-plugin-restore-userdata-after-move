@@ -12,6 +12,8 @@ public class MatchingTests
     private static readonly Guid OtherMovieId = new("5fc90611-0000-0000-0000-00000000000f");
     private static readonly Guid EpisodeId = new("e20d6d96-c126-ffa4-af28-fd74a4da81b2");
     private static readonly Guid SeriesId = new("03cb098f-0000-0000-0000-0000000000aa");
+    private static readonly Guid OtherEpisodeId = new("bd21e6b4-0000-0000-0000-0000000000bb");
+    private static readonly Guid OtherSeriesId = new("7c4e1a90-0000-0000-0000-0000000000cc");
 
     [Fact]
     public void KeyMatchingIsOrdinalAndCaseSensitive()
@@ -269,6 +271,105 @@ public class MatchingTests
 
         Assert.Equal(2, result.Diagnostics.EligibleTargetCount);
         Assert.Equal(1, result.Diagnostics.EligibleTargetsWithProviderKeys);
+    }
+
+    [Fact]
+    public void OneEpisodeSnapshotResolvingToTwoEpisodesIsRefused()
+    {
+        // Jellyfin fans one save across every key the episode reported, so this
+        // pair of rows is one snapshot written twice: same user, same state, same
+        // retention stamp, different key. Complementary metadata after a move can
+        // send the two halves to different current episodes — the episode-level
+        // IMDb key to A, the series IMDb plus SSSEEE to B.
+        //
+        // Each half then satisfies the IMDb rule on its own, and the duplicate-key
+        // guard never fires because A and B share no raw key. Grouping by
+        // (user, target) put the contradiction between the two groups instead of
+        // inside either, and the run copied one old snapshot onto two episodes.
+        var a = Scenario.Episode(EpisodeId, SeriesId, seriesImdb: null, path: "/data/library/tv/A/S01E01.mkv") with
+        {
+            UserDataKeys = ["tt7654321", EpisodeId.ToString("D")],
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Imdb"] = "tt7654321" },
+        };
+
+        var b = Scenario.Episode(OtherEpisodeId, OtherSeriesId, seriesImdb: "tt0903747", path: "/data/library/tv/B/S01E01.mkv");
+
+        var result = Scenario.Analyze(
+            [
+                Scenario.Row(Scenario.UserA, "tt7654321"),
+                Scenario.Row(Scenario.UserA, "tt0903747001001"),
+            ],
+            [a, b]);
+
+        Assert.Empty(result.Writes);
+        Assert.Equal(0, result.CandidateCounts[ReasonCode.Ready]);
+        Assert.Equal(2, result.CandidateCounts[ReasonCode.AmbiguousSourceAttribution]);
+        Assert.All(result.SourceRows, row => Assert.Equal(ReasonCode.AmbiguousSourceAttribution, row.Reason));
+    }
+
+    [Fact]
+    public void TwoEpisodesStrandedTogetherAreStillBothRecovered()
+    {
+        // The false positive the rule above must not produce. A batch deletion
+        // stamps every row with one retention date, and "played once, never
+        // resumed" is what most rows look like — so two episodes deleted in the
+        // same sweep can be identical in every field but their keys, exactly like
+        // one episode's fan-out.
+        //
+        // What tells them apart is that a real fan-out arrives whole: each of
+        // these episodes keeps both its own IMDb key and its series-derived one,
+        // so neither is the half-a-snapshot shape the contradiction is about.
+        var first = Scenario.Episode(EpisodeId, SeriesId, path: "/data/library/tv/Show/S01E01.mkv") with
+        {
+            UserDataKeys = ["tt0903747001001", "tt1000001", EpisodeId.ToString("D")],
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Imdb"] = "tt1000001" },
+        };
+
+        var second = Scenario.Episode(OtherEpisodeId, SeriesId, episode: 2, path: "/data/library/tv/Show/S01E02.mkv") with
+        {
+            UserDataKeys = ["tt0903747001002", "tt1000002", OtherEpisodeId.ToString("D")],
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Imdb"] = "tt1000002" },
+        };
+
+        var result = Scenario.Analyze(
+            [
+                Scenario.Row(Scenario.UserA, "tt0903747001001"),
+                Scenario.Row(Scenario.UserA, "tt1000001"),
+                Scenario.Row(Scenario.UserA, "tt0903747001002"),
+                Scenario.Row(Scenario.UserA, "tt1000002"),
+            ],
+            [first, second]);
+
+        Assert.Equal(0, result.CandidateCounts[ReasonCode.AmbiguousSourceAttribution]);
+        Assert.Equal(2, result.Writes.Count);
+        Assert.Contains(result.Writes, write => write.ItemId.Equals(EpisodeId));
+        Assert.Contains(result.Writes, write => write.ItemId.Equals(OtherEpisodeId));
+    }
+
+    [Fact]
+    public void DivergentAttributionForDifferentSnapshotsIsNotAContradiction()
+    {
+        // Same two half-groups as the refusal above, but the rows disagree about
+        // what happened: different play counts, different stamps. They are two
+        // snapshots, not one written twice, so there is nothing contradictory
+        // about them landing on two episodes.
+        var a = Scenario.Episode(EpisodeId, SeriesId, seriesImdb: null, path: "/data/library/tv/A/S01E01.mkv") with
+        {
+            UserDataKeys = ["tt7654321", EpisodeId.ToString("D")],
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Imdb"] = "tt7654321" },
+        };
+
+        var b = Scenario.Episode(OtherEpisodeId, OtherSeriesId, seriesImdb: "tt0903747", path: "/data/library/tv/B/S01E01.mkv");
+
+        var result = Scenario.Analyze(
+            [
+                Scenario.Row(Scenario.UserA, "tt7654321", playCount: 3, retention: new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc)),
+                Scenario.Row(Scenario.UserA, "tt0903747001001", playCount: 9, retention: new DateTime(2026, 8, 9, 0, 0, 0, DateTimeKind.Utc)),
+            ],
+            [a, b]);
+
+        Assert.Equal(0, result.CandidateCounts[ReasonCode.AmbiguousSourceAttribution]);
+        Assert.Equal(2, result.Writes.Count);
     }
 
     [Fact]

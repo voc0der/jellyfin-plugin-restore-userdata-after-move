@@ -75,6 +75,21 @@ public sealed record DetachedUserDataRow
         CultureInfo.InvariantCulture,
         $"user={UserId:N};key={CustomDataKey};retention={FormatDate(RetentionDate)};{RecoveryStateComparer.Render(State)};likes={FormatBool(Likes)};audio={FormatInt(AudioStreamIndex)};subtitle={FormatInt(SubtitleStreamIndex)}");
 
+    /// <summary>
+    /// Gets everything this row says, apart from the key it says it under.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin fans one save out across every key the item reported, so a single
+    /// item's stranded state arrives as several rows identical in every field but
+    /// <see cref="CustomDataKey"/>. This is what makes two of them recognisable as
+    /// two renderings of one snapshot rather than two snapshots that happen to
+    /// look alike — and therefore what makes it a contradiction when they resolve
+    /// to different current items.
+    /// </remarks>
+    public string PayloadFingerprint => string.Create(
+        CultureInfo.InvariantCulture,
+        $"user={UserId:N};retention={FormatDate(RetentionDate)};{RecoveryStateComparer.Render(State)};likes={FormatBool(Likes)};audio={FormatInt(AudioStreamIndex)};subtitle={FormatInt(SubtitleStreamIndex)}");
+
     private static string FormatDate(DateTime? value) =>
         value is null ? "-" : DateTimeNormalization.ToUtc(value.Value).ToString("O", CultureInfo.InvariantCulture);
 
