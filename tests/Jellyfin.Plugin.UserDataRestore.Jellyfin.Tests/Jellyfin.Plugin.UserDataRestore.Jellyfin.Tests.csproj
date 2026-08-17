@@ -31,6 +31,12 @@
   <ItemGroup>
     <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
     <PackageReference Include="Jellyfin.Database.Implementations" Version="10.11.11" />
+
+    <!-- So the reader can be run against the host's real JellyfinDbContext
+         rather than against a description of it. Every query this plugin makes
+         is LINQ that a provider has to translate, and a translation that fails
+         does so at runtime, on a server, mid-restore (DESIGN §12.2). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
