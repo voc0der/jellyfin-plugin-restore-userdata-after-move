@@ -20,12 +20,18 @@
 #
 # The last one is the check that would have caught 1.0.0.4 for what it was rather
 # than as a stale checksum: correcting the hash would have published materially
-# older code under a newer tag and changelog. It needs the tags locally, so it is
-# skipped with a note when a tag cannot be resolved (a shallow clone, a fork
-# without tags) rather than failing for a reason that is not about the catalogue.
+# older code under a newer tag and changelog. It is also the one that goes quiet
+# on its own -- several of these builds were made from commits no branch or tag
+# reaches any more, so a fresh clone has never heard of them -- which is why it
+# fetches what it needs by SHA and treats anything it still cannot establish as a
+# failure. An audit that reports a number larger than what it checked is worse
+# than no audit.
 #
 #   scripts/audit-catalogue.sh                    both catalogues
 #   scripts/audit-catalogue.sh manifest.json      one of them
+#   scripts/audit-catalogue.sh --allow-unverified-provenance
+#                                                 downgrade unreachable history
+#                                                 to a warning, and say so
 #
 # Exit status is the result: 0 means every retained entry matched its download.
 set -euo pipefail
@@ -33,7 +39,24 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 CACHE="${AUDIT_CACHE:-${TMPDIR:-/tmp}/jellyfin-catalogue-audit}"
-MANIFESTS=("$@")
+
+# Provenance that cannot be established is a failure, not a note. A green run
+# that quietly skipped the one check able to tell a stale checksum from
+# materially different code is the state this whole script exists to leave
+# behind, and it is a state that arrives on its own: the commits behind
+# 1.0.0.8 through 1.0.0.11 are reachable from no branch or tag, so a fresh clone
+# has never heard of them and skipped four entries while reporting 24 verified.
+# They are fetched by SHA now. --allow-unverified-provenance is for a clone that
+# genuinely cannot reach the remote, and says so in the summary either way.
+STRICT=1
+MANIFESTS=()
+for arg in "$@"; do
+    case "$arg" in
+        --allow-unverified-provenance) STRICT=0 ;;
+        -*) echo "unknown option: $arg" >&2; exit 2 ;;
+        *) MANIFESTS+=("$arg") ;;
+    esac
+done
 [ ${#MANIFESTS[@]} -gt 0 ] || MANIFESTS=(manifest.json manifest-jellyfin-12.json)
 
 if [ -t 1 ]; then
@@ -49,18 +72,44 @@ SKIPPED=0
 
 fail() { FAILURES=$((FAILURES + 1)); printf '   %s- %s%s\n' "$C_RED" "$*" "$C_OFF"; }
 ok()   { printf '   %s+%s %s\n' "$C_GREEN" "$C_OFF" "$*"; }
-note() { SKIPPED=$((SKIPPED + 1)); printf '   %s? %s%s\n' "$C_YELLOW" "$*" "$C_OFF"; }
 info() { printf '   %s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
 
-for tool in curl jq unzip md5sum; do
+# Unresolvable provenance. Counted either way, so the summary can never claim
+# more than was actually checked; fatal unless the caller opted out.
+unverified() {
+    SKIPPED=$((SKIPPED + 1))
+    if [ "$STRICT" -eq 1 ]; then
+        fail "$*
+     Pass --allow-unverified-provenance if this clone genuinely cannot reach the
+     remote; the summary will then say how much went unchecked."
+    else
+        printf '   %s? %s%s\n' "$C_YELLOW" "$*" "$C_OFF"
+    fi
+}
+
+for tool in curl jq unzip md5sum git; do
     command -v "$tool" >/dev/null || { echo "missing required tool: $tool" >&2; exit 2; }
 done
 
 mkdir -p "$CACHE"
 
-# The commit a release tag points at, or nothing if this clone cannot say.
+# The commit a release tag points at, fetching the tag if this clone lacks it.
 tag_commit() {
+    git rev-parse -q --verify "refs/tags/$1^{commit}" 2>/dev/null && return 0
+    git fetch --quiet --no-tags origin "refs/tags/$1:refs/tags/$1" 2>/dev/null || true
     git rev-parse -q --verify "refs/tags/$1^{commit}" 2>/dev/null || true
+}
+
+# Whether a commit object is available, fetching it by SHA if it is not.
+#
+# The builds behind several published versions were made from commits that no
+# branch or tag reaches any more, so `git clone` does not bring them and no
+# amount of fetch-depth or fetch-tags helps. GitHub still serves them when asked
+# for by name, which is the only reason those entries can be checked at all.
+have_commit() {
+    git cat-file -e "$1^{commit}" 2>/dev/null && return 0
+    git fetch --quiet --no-tags origin "$1" 2>/dev/null || true
+    git cat-file -e "$1^{commit}" 2>/dev/null
 }
 
 audit_entry() {
@@ -140,7 +189,7 @@ $(printf '%s\n' "$contents" | sed 's/^/       /')"
 
     if [ -z "$built_commit" ]; then
         rm -f "$dll"
-        note "the assembly carries no source-revision stamp, so it cannot be traced to a commit"
+        unverified "the assembly carries no source-revision stamp, so it cannot be traced to a commit"
         return
     fi
 
@@ -159,7 +208,7 @@ $(printf '%s\n' "$contents" | sed 's/^/       /')"
 
     tagged=$(tag_commit "$version")
     if [ -z "$tagged" ]; then
-        note "release tag $version is not in this clone, so the built commit cannot be checked (fetch tags to include it)"
+        unverified "release tag $version could not be resolved, so the built commit cannot be checked against it"
         return
     fi
 
@@ -168,8 +217,8 @@ $(printf '%s\n' "$contents" | sed 's/^/       /')"
         return
     fi
 
-    if ! git cat-file -e "$built_commit^{commit}" 2>/dev/null; then
-        note "the archive was built from ${built_commit:0:12}, which is not in this clone, so the difference from tag $version cannot be read"
+    if ! have_commit "$built_commit"; then
+        unverified "the archive was built from ${built_commit:0:12}, which could not be obtained, so the difference from tag $version cannot be read"
         return
     fi
 
@@ -218,6 +267,17 @@ if [ "$FAILURES" -gt 0 ]; then
     exit 1
 fi
 
-printf '%s%d retained entries match the archives they serve%s' "$C_GREEN$C_BOLD" "$CHECKED" "$C_OFF"
-[ "$SKIPPED" -gt 0 ] && printf ' (%d check(s) skipped)' "$SKIPPED"
-printf '.\n'
+# Two numbers, never one. Entries whose provenance could not be established were
+# still checked for checksum, shape and metadata -- but saying "24 verified" when
+# four of them were never traced to a commit is the shape of claim that let a
+# mismatched entry sit in the catalogue for months in the first place.
+if [ "$SKIPPED" -gt 0 ]; then
+    printf '%s%d retained entries match the archives they serve, and %d of them were not traced to a commit.%s\n' \
+        "$C_YELLOW$C_BOLD" "$CHECKED" "$SKIPPED" "$C_OFF"
+    printf 'Checksum, archive shape and metadata: %d/%d. Source provenance: %d/%d.\n' \
+        "$CHECKED" "$CHECKED" "$((CHECKED - SKIPPED))" "$CHECKED"
+    exit 0
+fi
+
+printf '%s%d retained entries match the archives they serve, provenance included.%s\n' \
+    "$C_GREEN$C_BOLD" "$CHECKED" "$C_OFF"

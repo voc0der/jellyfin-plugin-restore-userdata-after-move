@@ -1083,6 +1083,18 @@ which is the shape of every release made before the workflow began pinning
 it looks for — a replaced asset, a deleted release, a retagged commit — arrives
 without anybody committing anything.
 
+The provenance check is the one that goes quiet on its own, and quiet is the
+failure mode this whole script exists to remove.  Several published builds were
+made from commits no branch or tag reaches any more, so `git clone` does not
+bring them and no `fetch-depth` setting helps: a fresh checkout skipped four
+entries and still reported twenty-four verified.  Those commits are fetched by
+SHA — GitHub serves them when asked by name — and anything still unresolvable
+fails the run rather than passing with a note.  `--allow-unverified-provenance`
+downgrades that to a warning for a clone that genuinely cannot reach the remote,
+and the summary then reports two numbers instead of one, because "24 verified"
+when four were never traced to a commit is the same species of claim as a
+checksum that describes no file.
+
 No schema-name or raw-SQL branches are allowed.  If the EF model changes enough
 to break compilation or the tested projection, publish a new plugin build.
 

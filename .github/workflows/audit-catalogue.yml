@@ -30,10 +30,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Full history and tags: the audit compares each archive's embedded source
-    # revision against the commit its release tag points at, which a shallow
-    # clone cannot answer. Without this the check downgrades itself to a note
-    # and the job passes having skipped the interesting half.
+    # Full history and tags, so the common case needs no extra round trips. It is
+    # not sufficient on its own: several published builds were made from commits
+    # no branch or tag reaches, which no fetch-depth brings down, so the audit
+    # fetches those by SHA itself. Both are needed -- and the run fails rather
+    # than passing with a note if provenance still cannot be established, which
+    # is why this is not left to depend on the checkout alone.
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0
