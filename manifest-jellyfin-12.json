@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.23",
+        "changelog": "## What's Changed\n\n- ci(gap): run the live server proof on every commit that ships (2638413)\n- chore(release): update the plugin catalogues for version 1.0.0.22 (f6b1cbb)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.22...1.0.0.23\n",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.23/RestoreUserDataAfterMove_1.0.0.23_jellyfin-12.0.0-rc5.zip",
+        "checksum": "88d170642dab4bfd6a6ab75ebc13b9c8",
+        "timestamp": "2026-08-17T15:50:22Z"
+      },
+      {
         "version": "1.0.0.22",
         "changelog": "## What's Changed\n\n- fix(apply): verify against the database, not the manager's cache alone (77e63cb)\n- test(apply): drive the write path through the faults it exists to decline (11dcec8)\n- test(database): run the reads against both servers' provider stacks (f08c65c)\n- chore(release): update the plugin catalogues for version 1.0.0.21 (d3add14)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.21...1.0.0.22\n",
         "targetAbi": "12.0.0.0",
