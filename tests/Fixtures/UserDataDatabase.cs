@@ -2,13 +2,14 @@ using System.Globalization;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.DbConfiguration;
 using Jellyfin.Database.Implementations.Locking;
+using Jellyfin.Plugin.UserDataRestore.Jellyfin;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 
-namespace Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests;
+namespace Jellyfin.Plugin.UserDataRestore.Tests.Fixtures;
 
 /// <summary>
 /// A real <see cref="JellyfinDbContext"/> over a throwaway SQLite database.
@@ -31,8 +32,17 @@ namespace Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests;
 /// building two more entity graphs whose own required members have nothing to do
 /// with anything under test — a fixture testing itself. What the reader reads is
 /// a row in a table, so a row in the table is what these put there.</para>
+/// <para><b>What this is not.</b> <see cref="IJellyfinDatabaseProvider"/> is
+/// substituted, so the server's own provider conventions — the UTC handling
+/// Jellyfin's SQLite provider layers onto the model among them — are absent. This
+/// is the real context class, the real entity model, and the real provider doing
+/// the translating; it is not a fully host-configured model, and a defect living
+/// only in a convention the host adds would pass here. The reader normalizes
+/// every timestamp it returns rather than trusting the model to, which is why the
+/// assertions about <see cref="DateTimeKind"/> below still mean something — they
+/// are testing that normalization, not the convention.</para>
 /// </remarks>
-internal sealed class UserDataDatabase : IDisposable
+public sealed class UserDataDatabase : IDisposable
 {
     private readonly SqliteConnection _connection;
 
@@ -82,6 +92,28 @@ internal sealed class UserDataDatabase : IDisposable
         bool favorite = true,
         double? rating = 9) =>
         AddRow(itemId, userId, key, played, playCount, ticks, favorite, rating, null);
+
+    /// <summary>The fingerprints of every detached row this user holds under these keys.</summary>
+    public IReadOnlyList<string> DetachedFingerprints(Guid userId, IReadOnlyList<string> keys) =>
+        [.. Reader.ReadDetachedAsync(userId, keys, CancellationToken.None)
+            .GetAwaiter().GetResult()
+            .Select(row => row.Fingerprint)
+            .Order(StringComparer.Ordinal)];
+
+    /// <summary>The fingerprint of the one detached row under a key.</summary>
+    public string DetachedFingerprint(Guid userId, string key) =>
+        DetachedFingerprints(userId, [key]).Single();
+
+    /// <summary>Removes the detached row under a key, as Jellyfin's cleanup does.</summary>
+    public void RemoveDetached(Guid userId, string key)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM UserData WHERE ItemId = $item AND UserId = $user AND CustomDataKey = $key";
+        command.Parameters.AddWithValue("$item", UserDataReader.SentinelItemId);
+        command.Parameters.AddWithValue("$user", userId);
+        command.Parameters.AddWithValue("$key", key);
+        command.ExecuteNonQuery();
+    }
 
     public int RowCount()
     {

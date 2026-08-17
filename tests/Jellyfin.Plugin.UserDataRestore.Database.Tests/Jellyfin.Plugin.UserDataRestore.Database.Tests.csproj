@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Both lines, and here that is not duplicate coverage: these tests exist
+         to catch a provider failing to translate a query, and the two supported
+         servers ship different providers. 10.11.11 is Entity Framework 9.0.11,
+         12.0 RC5 is 10.0.10. A suite that only ran one of them would say nothing
+         about the other, which is the half of the matrix that has no live
+         harness run behind it either.
+
+         Separate from the adapter tests because those construct Jellyfin
+         entities and so pull in Jellyfin.Controller, which carries a framework
+         reference to ASP.NET Core. Nothing here needs an entity — the reader
+         talks to a database — so nothing here needs that runtime, and the net10
+         half stays runnable on a machine that has the .NET 10 runtime without
+         the ASP.NET Core 10 one. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Pinned to what each server actually ships, taken from the host package's
+       own dependency. A test that verified translation against some other
+       version of the provider would be verifying the wrong thing. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <JellyfinPackageVersion>10.11.11</JellyfinPackageVersion>
+    <EntityFrameworkVersion>9.0.11</EntityFrameworkVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <JellyfinPackageVersion>12.0.0-rc5</JellyfinPackageVersion>
+    <EntityFrameworkVersion>10.0.10</EntityFrameworkVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="$(JellyfinPackageVersion)" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(EntityFrameworkVersion)" />
+
+    <!-- Pinned past the native SQLite build EF's own dependency drags in, which
+         carries a high-severity advisory. It never reaches an archive — build.sh
+         refuses to package anything but this plugin's two assemblies — but a
+         known-vulnerable transitive dependency sitting in the build output is
+         not something to leave for a scanner to find later. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
+  <!-- The database layer compiled straight in, rather than referenced through
+       the plugin project. Referencing the plugin drags in Jellyfin.Controller
+       and with it the ASP.NET Core framework reference, which is what confines a
+       test run to whichever machines have that exact runtime — the constraint
+       that kept the 12.0 provider untested in the first place.
+
+       It is a narrower claim than "the shipped assembly was tested", and worth
+       being plain about: what these exercise is the same source, the same
+       expression trees, and the same provider, which is all that query
+       translation depends on. It also asserts something on its own. These two
+       files have no business knowing about Jellyfin.Controller, and the day one
+       of them acquires a reference to it, this project stops compiling. -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/Jellyfin.Plugin.UserDataRestore.Core/Jellyfin.Plugin.UserDataRestore.Core.csproj" />
+    <Compile Include="../Fixtures/UserDataDatabase.cs" Link="UserDataDatabase.cs" />
+    <Compile Include="../../src/Jellyfin.Plugin.UserDataRestore/Jellyfin/UserDataReader.cs" Link="UserDataReader.cs" />
+    <Compile Include="../../src/Jellyfin.Plugin.UserDataRestore/Jellyfin/DatabaseModelGate.cs" Link="DatabaseModelGate.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

@@ -40,6 +40,12 @@ jobs:
     - name: Run the Jellyfin adapter tests
       run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests/ --verbosity minimal
 
+    # Multi-targeted on purpose: 10.11.11 is Entity Framework 9.0.11 and 12.0 RC5
+    # is 10.0.10, and a query one translates is not automatically one the other
+    # does. Running a single framework here would leave half the matrix untested.
+    - name: Run the database tests against both provider stacks
+      run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Database.Tests/ --verbosity minimal
+
     # The release workflow's one-release-per-commit invariant is three settings
     # deep and every one of them fails silently: a dropped pending run leaves no
     # release to notice the absence of. Assert them here rather than trust a

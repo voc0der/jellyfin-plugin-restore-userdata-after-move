@@ -32,15 +32,19 @@
     <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
     <PackageReference Include="Jellyfin.Database.Implementations" Version="10.11.11" />
 
-    <!-- So the reader can be run against the host's real JellyfinDbContext
-         rather than against a description of it. Every query this plugin makes
-         is LINQ that a provider has to translate, and a translation that fails
-         does so at runtime, on a server, mid-restore (DESIGN §12.2). -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
+    <!-- The write path talks to the database as well as to the managers, so the
+         faults worth injecting into it are database faults. Pinned to what
+         10.11.11 itself ships. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.11" />
+
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/Jellyfin.Plugin.UserDataRestore/Jellyfin.Plugin.UserDataRestore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Fixtures/UserDataDatabase.cs" Link="UserDataDatabase.cs" />
   </ItemGroup>
 
   <ItemGroup>

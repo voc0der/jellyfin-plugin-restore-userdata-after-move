@@ -1,4 +1,7 @@
-namespace Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests;
+using Jellyfin.Plugin.UserDataRestore.Jellyfin;
+using Jellyfin.Plugin.UserDataRestore.Tests.Fixtures;
+
+namespace Jellyfin.Plugin.UserDataRestore.Database.Tests;
 
 /// <summary>
 /// Every read this plugin makes, run against the host's real model (DESIGN §12.2).

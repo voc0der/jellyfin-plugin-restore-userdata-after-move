@@ -33,6 +33,10 @@ dotnet test tests/Jellyfin.Plugin.UserDataRestore.Core.Tests/Jellyfin.Plugin.Use
 dotnet test tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests.csproj \
     --nologo -v q
 
+# Both server lines' providers, which is why this one multi-targets.
+dotnet test tests/Jellyfin.Plugin.UserDataRestore.Database.Tests/Jellyfin.Plugin.UserDataRestore.Database.Tests.csproj \
+    --nologo -v q
+
 for target in "${TARGETS[@]}"; do
     IFS=: read -r framework server abi <<< "$target"
 
