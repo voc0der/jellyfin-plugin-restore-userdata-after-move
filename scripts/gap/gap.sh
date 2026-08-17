@@ -24,11 +24,23 @@ CACHE="${GAP_CACHE:-$HOME/.cache/jellyfin-gap}"
 SCRATCH_ROOT="${GAP_SCRATCH:-}"
 KEEP=0
 PORT_BASE=""
-LINES=()
+
+# Not LINES. That name is Bash's own: in an interactive shell it holds the
+# terminal height, and a SIGWINCH from an ordinary window resize rewrites
+# element 0 with a row count. The last loop in this file would then hand
+# run_line something like "41", no case arm would match, and `set -u` would
+# abort at the read below it with `spec: unbound variable` -- minutes into a run,
+# after the build, for a reason that has nothing to do with anything under test.
+SERVER_LINES=()
 
 # framework:package-version:tarball-url-path:default-port
 readonly LINE_10="net9.0|10.11.11|stable/v10.11.11/amd64/jellyfin_10.11.11-amd64.tar.gz|18096"
 readonly LINE_12="net10.0|12.0.0-rc5|preview/v12.0-rc5/amd64/jellyfin_12.0-rc5-amd64.tar.gz|18098"
+
+# The libraries this harness creates, filled in once the server has assigned
+# them IDs. Everything the plugin is asked to do is scoped to these two.
+MOVIES_LIB_ID=""
+SHOWS_LIB_ID=""
 
 readonly SENTINEL="00000000-0000-0000-0000-000000000001"
 readonly ADMIN_PW="gap-admin-pw"
@@ -41,14 +53,14 @@ while [ $# -gt 0 ]; do
         --scratch) SCRATCH_ROOT="$2"; shift ;;
         --port) PORT_BASE="$2"; shift ;;
         --cache) CACHE="$2"; shift ;;
-        10.11.11|12.0-rc5) LINES+=("$1") ;;
-        both) LINES=(10.11.11 12.0-rc5) ;;
+        10.11.11|12.0-rc5) SERVER_LINES+=("$1") ;;
+        both) SERVER_LINES=(10.11.11 12.0-rc5) ;;
         -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
     shift
 done
-[ ${#LINES[@]} -gt 0 ] || LINES=(10.11.11 12.0-rc5)
+[ ${#SERVER_LINES[@]} -gt 0 ] || SERVER_LINES=(10.11.11 12.0-rc5)
 
 # ---------------------------------------------------------------------------
 # Output
@@ -103,11 +115,34 @@ require_contains() {
     esac
 }
 
+# The names Bash writes to on its own. Storing anything of ours in one of them
+# means the shell can overwrite it mid-run: LINES and COLUMNS are rewritten from
+# the terminal size on every SIGWINCH, so an ordinary window resize used to
+# replace the first selected server version with a row count and abort the run
+# with an unbound-variable error several minutes in.
+#
+# A static check rather than a PTY one, on purpose. Reproducing the corruption
+# needs a real terminal, which CI does not have, so a resize test would pass
+# there whether or not the bug were back. What actually has to hold is that no
+# state of this harness lives in a name the shell owns, and that is checkable
+# anywhere.
+assert_no_shell_owned_variables() {
+    # IFS is absent deliberately: `IFS='|' read ...` is a command prefix scoped
+    # to that one call, not somewhere this harness parks a value.
+    local owned='LINES|COLUMNS|SECONDS|RANDOM|SRANDOM|LINENO|HISTFILE|HISTSIZE|OPTARG|OPTIND|PWD|OLDPWD|REPLY|FUNCNAME|EPOCHSECONDS|EPOCHREALTIME'
+    local offenders
+    offenders=$(grep -nE "^[[:space:]]*($owned)(=|\+=|\[)" "${BASH_SOURCE[0]}" || true)
+    [ -z "$offenders" ] || die "this harness stores its own state in a variable Bash manages:
+$offenders
+  Bash rewrites these behind the script -- LINES and COLUMNS on every terminal
+  resize -- so whatever was in them is not what the run put there. Rename it."
+}
+
 # ---------------------------------------------------------------------------
 # Preconditions
 # ---------------------------------------------------------------------------
 
-for tool in curl jq sqlite3 ffmpeg unzip tar dotnet; do
+for tool in curl jq sqlite3 ffmpeg unzip tar dotnet python3; do
     command -v "$tool" >/dev/null || die "$tool is required and is not on PATH."
 done
 
@@ -479,6 +514,19 @@ create_libraries() {
 
     api_ok POST "/Library/VirtualFolders?name=Movies&collectionType=movies&refreshLibrary=false" "$movies_options" >/dev/null
     api_ok POST "/Library/VirtualFolders?name=Shows&collectionType=tvshows&refreshLibrary=false" "$shows_options" >/dev/null
+
+    # The IDs the settings page would post. Captured here, while the server is
+    # up, because the plugin configuration is planted later with it stopped.
+    MOVIES_LIB_ID=$(library_id Movies)
+    SHOWS_LIB_ID=$(library_id Shows)
+    [ -n "$MOVIES_LIB_ID" ] && [ -n "$SHOWS_LIB_ID" ] \
+        || die "could not read back the IDs of the libraries this harness just created.
+  Everything downstream is scoped to them, so there is nothing to test without them."
+    info "libraries: Movies ${MOVIES_LIB_ID:0:8}, Shows ${SHOWS_LIB_ID:0:8}"
+}
+
+library_id() {
+    api_ok GET /Library/VirtualFolders | jq -r --arg name "$1" '.[] | select(.Name == $name) | .ItemId' | head -1
 }
 
 # ---------------------------------------------------------------------------
@@ -941,11 +989,19 @@ PLUGIN_CONFIG=""
 # and kept reading the fields, so an upgraded install carried whatever was last
 # saved and went on obeying it from a page that no longer showed it. This plants
 # exactly that install: a final-path prefix no title on this server sits beneath,
-# and the media-file check turned off.
+# and the media-file check turned off — over a library selection that is filled
+# in, which is what an operator who has been through the settings page has.
 #
 # The prefix is chosen to be load-bearing. If the run honours it, every target
 # fails the path check and the restore count assertion above fails first — so
 # these settings cannot be quietly reintroduced and covered by a green line.
+#
+# The selection is load-bearing in the other direction. Through 1.0.0.15 an empty
+# one meant "every library", so this file used to leave it empty and still reach
+# the restore assertions; since 1.0.0.16 an empty selection is a refusal, and the
+# harness went on planting one — which meant the only real-server proof this
+# repository has stopped before its first plan and nothing noticed, because no
+# workflow runs it. Every assertion below this line depends on the two IDs.
 #
 # Written while the server is stopped, and the file is created rather than
 # edited: the plugin only persists a configuration once something reads one, so
@@ -957,10 +1013,13 @@ plant_legacy_configuration() {
     PLUGIN_CONFIG="$DATA/plugins/configurations/Jellyfin.Plugin.UserDataRestore.xml"
     mkdir -p "$(dirname "$PLUGIN_CONFIG")"
 
-    cat > "$PLUGIN_CONFIG" <<'XML'
+    cat > "$PLUGIN_CONFIG" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <EligibleLibraryIds />
+  <EligibleLibraryIds>
+    <string>$MOVIES_LIB_ID</string>
+    <string>$SHOWS_LIB_ID</string>
+  </EligibleLibraryIds>
   <FinalPathPrefixes>
     <string>/nowhere/a/title/lives</string>
   </FinalPathPrefixes>
@@ -968,7 +1027,51 @@ plant_legacy_configuration() {
   <VerboseLogging>false</VerboseLogging>
 </PluginConfiguration>
 XML
-    info "planted a 1.0.0.7-era scope override: prefix /nowhere/a/title/lives, file check off"
+    info "planted a 1.0.0.7-era scope override over both libraries: prefix /nowhere/a/title/lives, file check off"
+}
+
+# The refusal an empty selection now is, asserted on its own rather than used as
+# the setup for anything else.
+#
+# Deliberately last, and deliberately by unticking rather than by starting from
+# nothing. Last, because a refusal is a failed task and a failed task logs at
+# error level, which is the one thing the phase above asserts the absence of.
+# By unticking, because that is the gesture this refusal exists for: through
+# 1.0.0.15 an empty selection meant *every* library, so the only way to say
+# "narrow this to nothing" resolved to the widest write scope available.
+verify_empty_selection_refuses() {
+    step "Unticking every library stops the run rather than widening it"
+
+    stop_server
+    python3 - "$PLUGIN_CONFIG" <<'PY'
+import re, sys
+path = sys.argv[1]
+with open(path) as handle:
+    text = handle.read()
+# Exactly what the settings page posts when no box is ticked, which is also what
+# an untouched install stores -- the collision that made the old reading unsafe.
+updated = re.sub(r'<EligibleLibraryIds>.*?</EligibleLibraryIds>',
+                 '<EligibleLibraryIds />', text, flags=re.S)
+if updated == text:
+    raise SystemExit('no <EligibleLibraryIds> block to empty in ' + path)
+with open(path, 'w') as handle:
+    handle.write(updated)
+PY
+    start_server
+    authenticate admin "$ADMIN_PW"
+    info "unticked every library in the saved configuration"
+
+    local before
+    before=$(newest_plan_name)
+    run_task_by_key "$TASK_KEY" "run with nothing ticked"
+
+    require "the run failed rather than reporting a clean no-op" Failed "$TASK_STATUS"
+    require "and wrote no plan, having refused before analysis" "$before" "$(newest_plan_name)"
+
+    # The message is the product here. A task that goes red without saying which
+    # page to go and fix it on is indistinguishable from a broken plugin.
+    require_contains "and said which page to go and tick something on" \
+        "No libraries are selected" "$TASK_ERROR"
 }
 
 # What the run says became of those writes. The plan is only an audit record if
@@ -1020,6 +1123,10 @@ run_line() {
     case "$LINE" in
         10.11.11) spec=$LINE_10 ;;
         12.0-rc5) spec=$LINE_12 ;;
+        # An unmatched arm used to leave $spec unset and let `set -u` abort on
+        # the read below with a message about a variable nobody had heard of.
+        # Say what actually went wrong instead.
+        *) die "no server line is defined for '$LINE'" ;;
     esac
     IFS='|' read -r FRAMEWORK PACKAGE URL_PATH PORT <<< "$spec"
     [ -n "$PORT_BASE" ] && { PORT=$PORT_BASE; PORT_BASE=$((PORT_BASE + 2)); }
@@ -1102,7 +1209,7 @@ run_line() {
     authenticate admin "$ADMIN_PW"
     log_mark=$(wc -l < "$SERVER_LOG")
 
-    step "One run, nothing configured"
+    step "One run, over both selected libraries"
     restore "restore"
     require "the conflicting title is excluded, the rest restored" 4 "$(planned_writes)"
     require "and it says why it skipped the other one" 2 "$(reason_count current_state_conflict)"
@@ -1215,19 +1322,24 @@ run_line() {
         END { flush(); print count + 0 }')
     require "the server logged nothing at error level during the run" 0 "$complaints"
 
+    # After that assertion, because this one deliberately fails a task.
+    verify_empty_selection_refuses
+
     stop_server
     printf '\n%s%s: all assertions held%s\n' "$C_GREEN$C_BOLD" "$LINE" "$C_OFF"
 }
 
 # ---------------------------------------------------------------------------
 
+assert_no_shell_owned_variables
+
 step "Building the plugin"
 build_plugin
 
-for line in "${LINES[@]}"; do
+for line in "${SERVER_LINES[@]}"; do
     run_line "$line"
 done
 
 RUN_OK=1
 printf '\n%s%d assertions passed across %d server line(s).%s\n' \
-    "$C_GREEN$C_BOLD" "$CHECKS" "${#LINES[@]}" "$C_OFF"
+    "$C_GREEN$C_BOLD" "$CHECKS" "${#SERVER_LINES[@]}" "$C_OFF"

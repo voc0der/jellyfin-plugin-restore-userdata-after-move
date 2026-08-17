@@ -51,8 +51,15 @@ library that was never broken proves nothing.
 ## What it asserts
 
 - The scheduled task registers, ships with no trigger of its own, and finds the
-  stranded state **with nothing configured**. No libraries selected, no path
-  prefixes typed.
+  stranded state across **both selected libraries**. The harness ticks the two
+  libraries it created, exactly as the settings page would; no path prefixes are
+  typed, because there is no control for them and the scope comes from the
+  libraries' own locations.
+- **Unticking every library refuses the run** rather than widening it, and the
+  task's error message names the page to go and fix it on. Asserted on its own,
+  at the end, and never used as the setup for anything else: from 1.0.0.16 an
+  empty selection is a refusal, and a harness that plants one reaches no plan,
+  no write, and no assertion after it.
 - A run with nothing to restore leaves `UserData` byte-for-byte unchanged.
 - A target whose current state moved since the analysis is **left alone**, and
   the run says which check declined it. The revalidation is per write, taken
