@@ -890,8 +890,22 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
 10. Call `IUserDataManager.SaveUserData(user, item, dto,
     UserDataSaveReason.UpdateUserData)`.
 11. Re-read through `IUserDataManager` and verify the six semantic fields.
-12. Query the current item's rows and verify that Jellyfin wrote the expected
-    current keys with the recovered state.
+12. Query the item's `UserData` rows and verify what actually reached storage.
+    The read above goes through the manager, which on 10.11 answers from a cache
+    the save itself populated: it establishes that the manager accepted the
+    state, not that a row exists.  So the database is asked directly.  No row for
+    the pair, or a row carrying something other than what was asked for, is
+    `uncertain` and stops the batch — the item holds state this run cannot
+    account for.
+
+    A key the item reports that carries *no* row is logged and does not stop
+    anything, and the asymmetry is deliberate.  Jellyfin fans a save across every
+    key the item reports and both supported lines do it in one transaction, so a
+    narrower fan-out is not a failed write; it is a write that will be harder to
+    find after the *next* move, because a future stranding of that key will match
+    nothing.  That is worth an operator's attention and not worth abandoning the
+    remaining restores over.  "This did not work" and "this worked less well than
+    expected" are different sentences and the run says whichever one is true.
 13. Append and flush the ledger record for this write, before the next write is
     attempted (§8.1).
 14. Report progress.
