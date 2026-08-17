@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.21",
+        "changelog": "## What's Changed\n\n- test(database): run every read against the host's real JellyfinDbContext (e196a3b)\n- chore(release): update the plugin catalogues for version 1.0.0.20 (85094b1)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.20...1.0.0.21\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.21/RestoreUserDataAfterMove_1.0.0.21_jellyfin-10.11.11.zip",
+        "checksum": "9cc5917faffc8f4a93144e3d4c49ae28",
+        "timestamp": "2026-08-17T11:20:39Z"
+      },
+      {
         "version": "1.0.0.20",
         "changelog": "## What's Changed\n\n- fix(audit): fail on provenance that cannot be established, and fetch what can (0ca3c9c)\n- test(gap): count the cleared prefixes without counting the selection (0796d5e)\n- fix(apply): revalidate the sentinel across every key the target answers to (d29386c)\n- fix(analysis): let an exact GUID settle its side instead of skipping the check (0a86e85)\n- chore(release): update the plugin catalogues for version 1.0.0.19 (1f07888)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.19...1.0.0.20\n",
         "targetAbi": "10.11.11.0",
