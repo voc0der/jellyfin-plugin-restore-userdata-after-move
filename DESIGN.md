@@ -1157,6 +1157,22 @@ restating what it returns.  It is scoped to what the core cannot answer: which
 items a lookup finds, which of them the filesystem is consulted about, and that
 the key sets the fixtures assume are the key sets Jellyfin actually produces.
 
+A third covers the write path itself, and it was the last thing to get one.
+Every rule guarding a restore was tested in the core and every query eventually
+in §12.2; what *consults* them at the moment of writing was reachable only by
+running a server, and three defects in a row landed precisely there.  A live
+server proves the happy path executes and cannot arrange for a source row to
+vanish between two statements, which is the entire subject.  So the write path is
+a class rather than two methods on the task — wrapper and core together, since
+which side of the save an exception arrived on is the whole difference between
+`failed` and `uncertain` — driven against a real throwaway database with the host
+managers substituted.  The faults it is put through are the ones it exists to
+decline: a source deleted, replaced, or newly appeared under a key that
+authorised nothing; a target row holding nothing but defaults; a target that
+stopped answering to its keys; a reader that fails before the save; a save that
+throws after entering the region where nobody knows; and a save the manager
+accepted that storage never saw.
+
 ### 12.2 Database/component tests
 
 Run against the actual version-pinned `JellyfinDbContext`, preferably with both

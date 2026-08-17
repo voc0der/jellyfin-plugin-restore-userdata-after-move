@@ -49,6 +49,13 @@
     <ProjectReference Include="../Jellyfin.Plugin.UserDataRestore.Core/Jellyfin.Plugin.UserDataRestore.Core.csproj" />
   </ItemGroup>
 
+  <!-- The write path is internal because nothing outside this assembly should
+       call it, and reachable from the tests because everything that decides
+       whether a restore is safe happens inside it. A seam, not an API. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="Configuration/configPage.html" />
   </ItemGroup>
