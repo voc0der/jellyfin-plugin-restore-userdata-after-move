@@ -34,6 +34,12 @@ jobs:
     - name: Run tests
       run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Core.Tests/ --verbosity minimal
 
+    # The adapter half. These construct real Jellyfin entities and assert what
+    # this plugin asks the server for and what it does with the answer — the
+    # layer the core tests have to assume is correct.
+    - name: Run the Jellyfin adapter tests
+      run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests/ --verbosity minimal
+
     # The release workflow's one-release-per-commit invariant is three settings
     # deep and every one of them fails silently: a dropped pending run leaves no
     # release to notice the absence of. Assert them here rather than trust a

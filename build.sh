@@ -30,6 +30,9 @@ mkdir -p "$OUT"
 dotnet test tests/Jellyfin.Plugin.UserDataRestore.Core.Tests/Jellyfin.Plugin.UserDataRestore.Core.Tests.csproj \
     --nologo -v q
 
+dotnet test tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests.csproj \
+    --nologo -v q
+
 for target in "${TARGETS[@]}"; do
     IFS=: read -r framework server abi <<< "$target"
 

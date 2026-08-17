@@ -1088,6 +1088,21 @@ Required cases:
 - Cancellation before and during the sequential loop.
 - Report and ledger retention never removes the armed plan.
 
+The Jellyfin-light core is where the reasoning lives, and its tests are written
+against key sets somebody typed into a fixture.  That leaves one thing they
+cannot reach: whether a live server hands the plugin the key sets those fixtures
+assume, and whether the adapter asked the right questions to get them.  Two
+defects lived exactly there — a live contender lookup that never enumerated the
+target episode's own siblings, and a collection pass that stat-ed media in
+libraries nobody had ticked — and no core test could have seen either, because
+both are about what the adapter *fetches* rather than what the core does with it.
+
+So a second suite covers the adapter, constructing real `Movie`, `Episode` and
+`Series` entities and reading their own `GetUserDataKeys()` rather than
+restating what it returns.  It is scoped to what the core cannot answer: which
+items a lookup finds, which of them the filesystem is consulted about, and that
+the key sets the fixtures assume are the key sets Jellyfin actually produces.
+
 ### 12.2 Database/component tests
 
 Run against the actual version-pinned `JellyfinDbContext`, preferably with both

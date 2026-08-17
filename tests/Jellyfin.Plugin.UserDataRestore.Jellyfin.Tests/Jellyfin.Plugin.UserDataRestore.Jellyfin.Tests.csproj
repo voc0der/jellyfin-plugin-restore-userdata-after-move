@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- The 10.11.11 line, and one line rather than both. These tests are about
+         this plugin's own adapter code against real Jellyfin entity types; the
+         version gate and the packaging split are what cover the two ABIs, and
+         running the same assertions twice would mostly prove the test project
+         builds twice.
+
+         10.11.11 rather than 12.0 because a Jellyfin reference drags in the
+         ASP.NET Core shared runtime, and a test suite that only runs where the
+         very latest one happens to be installed is a test suite that stops being
+         run. Every field measurement in evidence/ was taken on this line too. -->
+    <TargetFramework>net9.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <!-- The plugin excludes the host assemblies at runtime, because the running
+       server supplies them and a second copy inside the archive breaks type
+       identity. A test host is not a server, so here they are referenced
+       normally: without the runtime assets there is no BaseItem to construct
+       and nothing to test against. -->
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="10.11.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Jellyfin.Plugin.UserDataRestore/Jellyfin.Plugin.UserDataRestore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
