@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.26",
+        "changelog": "## What's Changed\n\n- refactor: take the code-scanning findings that were real, keep the one that was not (8e18753)\n- chore(tests): one NSubstitute across both suites, and a patched SQLite in each (aef852e)\n- chore(release): update the plugin catalogues for version 1.0.0.25 (f1611f5)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.25...1.0.0.26\n",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.26/RestoreUserDataAfterMove_1.0.0.26_jellyfin-12.0.0-rc5.zip",
+        "checksum": "c99c68c6a2c0307578b09a6d3040bb1b",
+        "timestamp": "2026-08-17T16:05:49Z"
+      },
+      {
         "version": "1.0.0.25",
         "changelog": "## What's Changed\n\n- chore: Bump NSubstitute from 5.3.0 to 6.2.0 (#38) (dee3217)\n- chore(release): update the plugin catalogues for version 1.0.0.24 (532b817)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.24...1.0.0.25\n",
         "targetAbi": "12.0.0.0",
