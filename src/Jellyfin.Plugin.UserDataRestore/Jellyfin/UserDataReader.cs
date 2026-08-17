@@ -1,7 +1,13 @@
 using Jellyfin.Database.Implementations;
+using Jellyfin.Plugin.UserDataRestore.Core.Analysis;
 using Jellyfin.Plugin.UserDataRestore.Core.Model;
 using Jellyfin.Plugin.UserDataRestore.Core.Verification;
 using Microsoft.EntityFrameworkCore;
+
+// Aliased because this file's own namespace ends in "Jellyfin", so an inline
+// Jellyfin.Database... reference inside it resolves against the plugin rather
+// than the host. The alias is bound out here, where it does not.
+using UserDataEntity = Jellyfin.Database.Implementations.Entities.UserData;
 
 namespace Jellyfin.Plugin.UserDataRestore.Jellyfin;
 
@@ -109,9 +115,60 @@ public sealed class UserDataReader(IDbContextFactory<JellyfinDbContext> dbFactor
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var rows = await db.UserData
-            .AsNoTracking()
-            .Where(row => row.ItemId == SentinelItemId)
+        return await ReadDetachedAsync(
+            db.UserData.AsNoTracking().Where(row => row.ItemId == SentinelItemId),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Re-reads the detached rows behind one planned write (DESIGN §9.1).
+    /// </summary>
+    /// <param name="userId">The user the write is for.</param>
+    /// <param name="keys">The keys the write's authorising rows were stored under.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The sentinel rows currently held for that user and those keys.</returns>
+    /// <remarks>
+    /// <para>The whole detached table is read once at the top of a run; this reads
+    /// back the handful of rows one write depends on, immediately before making
+    /// it, so <see cref="SourceRevalidation"/> can confirm they still say what the
+    /// analysis recorded.</para>
+    /// <para>One indexed lookup per planned write, and there are rarely many. It
+    /// exists because the sentinel is not this plugin's alone: Jellyfin's own
+    /// cleanup task deletes rows past a retention age, and another deletion can
+    /// replace a row under the same key with a newer snapshot, neither of which
+    /// requires the library scan the run already guards against.</para>
+    /// </remarks>
+    public async Task<IReadOnlyList<DetachedUserDataRow>> ReadDetachedAsync(
+        Guid userId,
+        IReadOnlyList<string> keys,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+
+        if (keys.Count == 0)
+        {
+            return [];
+        }
+
+        var wanted = keys.ToArray();
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        return await ReadDetachedAsync(
+            db.UserData
+                .AsNoTracking()
+                .Where(row => row.ItemId == SentinelItemId
+                    && row.UserId == userId
+                    && row.CustomDataKey != null
+                    && wanted.Contains(row.CustomDataKey)),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<DetachedUserDataRow>> ReadDetachedAsync(
+        IQueryable<UserDataEntity> query,
+        CancellationToken cancellationToken)
+    {
+        var rows = await query
             .Select(row => new
             {
                 row.UserId,

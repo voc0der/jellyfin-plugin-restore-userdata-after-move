@@ -63,13 +63,14 @@ public sealed record DetachedUserDataRow
     /// Gets a stable rendering of every field that matters for safety.
     /// </summary>
     /// <remarks>
-    /// Nothing re-reads this within a run any more — analysis and writing happen
-    /// in one pass, so there is no gap for a source row to change across
-    /// (DESIGN §9.1). It survives as the plan's identifier for a row: the thing
-    /// that lets one run's artifact be compared against another's, and lets a
-    /// reader tell two otherwise identical stranded snapshots apart. It therefore
-    /// still covers the report-only fields, because a row whose stream indexes
-    /// changed between runs is a different row.
+    /// Two jobs. It is what each write is re-checked against immediately before
+    /// the save (DESIGN §9.1): analysis and writing happen in one pass, but the
+    /// sentinel is not this plugin's alone, and a row can be deleted by Jellyfin's
+    /// own cleanup or replaced by a newer snapshot in the gap. And it is the
+    /// plan's identifier for a row — the thing that lets one run's artifact be
+    /// compared against another's, and lets a reader tell two otherwise identical
+    /// stranded snapshots apart. It covers the report-only fields for both
+    /// purposes: a row whose stream indexes changed is a different row.
     /// </remarks>
     public string Fingerprint => string.Create(
         CultureInfo.InvariantCulture,

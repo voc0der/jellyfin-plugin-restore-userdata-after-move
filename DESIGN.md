@@ -761,8 +761,7 @@ delete the currently armed plan.
 
 > There is no whole-plan preflight, because there is no plan to fly ahead of.
 > One task analyses and writes in the same pass (§1), so checks 1 and 10 no
-> longer exist, and checks 4–9 have nothing to re-read: the analysis that
-> produced the write happened seconds ago in the same process.
+> longer exist.
 >
 > What survives is per-write, listed in §9.2: every condition that admitted a
 > target is asked again of the live item immediately before writing to it.  That
@@ -770,6 +769,20 @@ delete the currently armed plan.
 > validates the whole batch and then writes it over the following minutes, so its
 > last checks are the stalest.  Check 3 survives too, both at entry and before
 > each write, and a scan starting mid-run abandons the rest of the batch.
+>
+> Check 4 survives as well, and for a reason it took a while to see: "the
+> analysis ran seconds ago in the same process" is an argument about this
+> plugin's own behaviour, and the sentinel is not this plugin's alone.  Jellyfin's
+> `CleanupUserDataTask` deletes detached rows past a retention age, and deleting
+> another item replaces the row under the same `(UserId, CustomDataKey)` with a
+> newer snapshot.  Neither needs a library scan, so neither trips the guard
+> above.  A deleted source leaves a run restoring state the server has finished
+> with; a superseded one is worse, because the older snapshot lands on the target
+> and the *newer* source then reads as `current_state_conflict` against it on
+> every later run and is never restored at all.  So each write re-reads the exact
+> sentinel rows that authorised it and matches them fingerprint for fingerprint,
+> and anything short of exact agreement declines the write.  The rows are still
+> untouched, so the next analysis reads whatever the sentinel holds now.
 >
 > Check 7's *uniqueness* clause is the one thing that cannot be answered from the
 > live item alone, because it is a property of the whole catalogue: no amount of
@@ -840,22 +853,27 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
    landing during the write loop, which no library scan need accompany.
 6. Check current state through `IUserDataManager`, and skip anything not at
    defaults.
-7. Re-query `UserData` row *existence* for the exact pair, against the database
+7. Re-read the detached rows this write is authorised by — the exact
+   `(UserId, CustomDataKey)` pairs the analysis recorded — and match their full
+   fingerprints.  Missing, replaced, or additional: skip.  The sentinel is not
+   this plugin's alone (§9.1), and a write whose source has gone or been
+   superseded is a write of state nothing stands behind any more.
+8. Re-query `UserData` row *existence* for the exact pair, against the database
    rather than through `IUserDataManager`.  The manager reports "no row" and "a
    row holding defaults" identically, and the difference between them is the
    difference between an item nobody has touched and an item somebody has just
    deliberately cleared.  Any row at all: skip.  This is the last check before the
    save, and deliberately so — it is the authoritative one, so nothing belongs
    between it and the write it guards.
-8. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
-9. Call `IUserDataManager.SaveUserData(user, item, dto,
-   UserDataSaveReason.UpdateUserData)`.
-10. Re-read through `IUserDataManager` and verify the six semantic fields.
-11. Query the current item's rows and verify that Jellyfin wrote the expected
+9. Create an `UpdateUserItemDataDto` containing only the six recoverable fields.
+10. Call `IUserDataManager.SaveUserData(user, item, dto,
+    UserDataSaveReason.UpdateUserData)`.
+11. Re-read through `IUserDataManager` and verify the six semantic fields.
+12. Query the current item's rows and verify that Jellyfin wrote the expected
     current keys with the recovered state.
-12. Append and flush the ledger record for this write, before the next write is
+13. Append and flush the ledger record for this write, before the next write is
     attempted (§8.1).
-13. Report progress.
+14. Report progress.
 
 Using the partial-update DTO preserves current audio/subtitle selections.  V1
 does not restore the detached stream indexes because they are positional and may

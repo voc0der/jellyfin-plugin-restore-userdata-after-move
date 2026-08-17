@@ -587,6 +587,31 @@ public class RestoreUserDataTask : IScheduledTask
             return new WriteResult(write, WriteOutcome.Skipped, "target_gained_state");
         }
 
+        // The other half of the question. Everything above asks whether this is
+        // still the right item to write to; this asks whether the state about to
+        // be written is still the state the sentinel holds.
+        //
+        // The stranded rows were read once, at the top of the run, and nothing
+        // this plugin does touches them. Other things do: Jellyfin's own cleanup
+        // task deletes sentinel rows past a retention age, and deleting another
+        // item can replace the row under the same (user, key) with a newer
+        // snapshot. Neither needs a library scan, so neither trips the guard that
+        // abandons the batch. Restoring a deleted source writes a copy of state
+        // the server has finished with; restoring a superseded one is worse,
+        // because the newer source then reads as current_state_conflict against
+        // what this run left behind and is never restored at all.
+        var sources = await reader.ReadDetachedAsync(write.UserId, write.SourceKeys, cancellationToken).ConfigureAwait(false);
+        if (SourceRevalidation.Evaluate(write.SourceFingerprints, sources) is { } stale)
+        {
+            _logger.LogWarning(
+                "The stranded rows that authorised restoring user {UserId} item {ItemId} are not what the analysis read ({Reason}); skipping. "
+                + "Something else changed the sentinel during this run. Nothing here has modified them, so the next run reads them as they are now.",
+                write.UserId,
+                write.ItemId,
+                stale);
+            return new WriteResult(write, WriteOutcome.Skipped, stale);
+        }
+
         // Row existence, straight from the database, because the manager cannot
         // answer it: it reports a pair with no row and a pair whose row holds
         // nothing but defaults identically. An unwatch or an unfavourite performed

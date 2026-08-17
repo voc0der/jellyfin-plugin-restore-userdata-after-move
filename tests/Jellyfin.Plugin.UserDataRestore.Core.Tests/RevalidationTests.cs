@@ -321,4 +321,87 @@ public class RevalidationTests
         Assert.Empty(ownership.Owners("tt0111161"));
         Assert.Empty(ownership.Owners(null));
     }
+
+    [Fact]
+    public void SourcesThatHaveNotChangedStillAuthoriseTheWrite()
+    {
+        var rows = Sources();
+
+        Assert.Null(SourceRevalidation.Evaluate(Fingerprints(rows), rows));
+    }
+
+    [Fact]
+    public void ASourceDeletedAfterTheAnalysisStopsTheWrite()
+    {
+        // Jellyfin's own CleanupUserDataTask deletes sentinel rows past a
+        // retention age. It needs no library scan, so the guard that abandons a
+        // run mid-rebuild does not cover it, and the run would otherwise restore
+        // an in-memory copy of state the server has finished with.
+        var planned = Fingerprints(Sources());
+        var live = Sources().Take(1).ToArray();
+
+        var verdict = SourceRevalidation.Evaluate(planned, live);
+
+        Assert.NotNull(verdict);
+        Assert.StartsWith(SourceRevalidation.SourceGone, verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EverySourceDisappearingStopsTheWrite()
+    {
+        var verdict = SourceRevalidation.Evaluate(Fingerprints(Sources()), []);
+
+        Assert.NotNull(verdict);
+        Assert.StartsWith(SourceRevalidation.SourceGone, verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASourceSupersededAfterTheAnalysisStopsTheWrite()
+    {
+        // Deleting another copy of the same title replaces the sentinel row under
+        // the same (user, key) with a newer snapshot. Writing the older one is not
+        // just wrong once: the newer source then reads as current_state_conflict
+        // against what this run left behind, so it is never restored on any later
+        // run either. The stale answer becomes sticky.
+        var planned = Fingerprints(Sources());
+        var live = new[]
+        {
+            Scenario.Row(Scenario.UserA, "tt0133093", playCount: 41),
+            Scenario.Row(Scenario.UserA, "603", playCount: 41),
+        };
+
+        var verdict = SourceRevalidation.Evaluate(planned, live);
+
+        Assert.NotNull(verdict);
+        Assert.StartsWith(SourceRevalidation.SourceReplaced, verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASourceAppearingUnderTheSameKeysStopsTheWrite()
+    {
+        // Nothing in the analysis authorised this row, so nothing here knows what
+        // it means. Declining costs a run; guessing costs the state.
+        var rows = Sources();
+        var live = new[] { rows[0], rows[1], Scenario.Row(Scenario.UserA, "tt0133093", favorite: false) };
+
+        var verdict = SourceRevalidation.Evaluate(Fingerprints(rows), live);
+
+        Assert.NotNull(verdict);
+        Assert.StartsWith(SourceRevalidation.SourceAppeared, verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWriteRecordingNoSourceAtAllIsRejectedRatherThanPassingVacuously()
+    {
+        Assert.Equal(SourceRevalidation.NoSourceRecorded, SourceRevalidation.Evaluate([], Sources()));
+    }
+
+    private static DetachedUserDataRow[] Sources() =>
+    [
+        Scenario.Row(Scenario.UserA, "tt0133093"),
+        Scenario.Row(Scenario.UserA, "603"),
+    ];
+
+    private static string[] Fingerprints(IEnumerable<DetachedUserDataRow> rows) =>
+        [.. rows.Select(row => row.Fingerprint).Order(StringComparer.Ordinal)];
 }
