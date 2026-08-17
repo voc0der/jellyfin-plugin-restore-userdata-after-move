@@ -263,12 +263,9 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager, Func<st
 
     private void AddEpisodes(Dictionary<Guid, BaseItem> contenders, Guid seriesId, Guid exclude)
     {
-        foreach (var candidate in EpisodesOf(seriesId))
+        foreach (var candidate in EpisodesOf(seriesId).Where(candidate => !candidate.Id.Equals(exclude)))
         {
-            if (!candidate.Id.Equals(exclude))
-            {
-                contenders[candidate.Id] = candidate;
-            }
+            contenders[candidate.Id] = candidate;
         }
     }
 

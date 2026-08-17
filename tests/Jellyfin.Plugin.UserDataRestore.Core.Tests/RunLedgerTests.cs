@@ -66,7 +66,12 @@ public class RunLedgerTests
         // far must parse, because a ledger truncated by a power cut is a ledger
         // missing its last line and nothing more.
         using var directory = new TemporaryDirectory();
-        var ledger = RunLedger.Open(directory.Path, Started);
+
+        // Disposed by scope rather than by a call at the end, so a failing
+        // assertion below cannot leave the handle open and take the directory's
+        // own cleanup down with it. The reads still happen while the ledger is
+        // open, which is the case under test.
+        using var ledger = RunLedger.Open(directory.Path, Started);
 
         ledger.Append(new WriteResult(Write(), WriteOutcome.Restored, null));
         ledger.Append(new WriteResult(Write(), WriteOutcome.Uncertain, "save_threw"));
@@ -75,8 +80,6 @@ public class RunLedgerTests
         Assert.All(lines, line => Assert.NotNull(JsonDocument.Parse(line)));
         Assert.Equal(["restored", "uncertain"], lines.Select(line =>
             JsonDocument.Parse(line).RootElement.GetProperty("outcome").GetString()));
-
-        ledger.Dispose();
     }
 
     [Fact]

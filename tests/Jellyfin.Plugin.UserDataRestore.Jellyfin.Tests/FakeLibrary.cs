@@ -45,7 +45,7 @@ internal sealed class FakeLibrary
             .Returns(call => Query(call.Arg<InternalItemsQuery>()));
 
         Manager.GetItemIds(Arg.Any<InternalItemsQuery>())
-            .Returns(call => (IReadOnlyList<Guid>)[.. Query(call.Arg<InternalItemsQuery>()).Select(item => item.Id)]);
+            .Returns(call => [.. Query(call.Arg<InternalItemsQuery>()).Select(item => item.Id)]);
 
         Manager.GetCollectionFolders(Arg.Any<BaseItem>())
             .Returns(call => _collectionFolders.TryGetValue(call.Arg<BaseItem>().Id, out var folders) ? folders : []);
