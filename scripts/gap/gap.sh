@@ -985,6 +985,21 @@ reason_count() { jq -r --arg r "$1" '.summary.candidateCounts[$r] // 0' "$PLAN";
 # should not.
 PLUGIN_CONFIG=""
 
+# How many entries one list in the saved configuration holds.
+#
+# Named element, not a `grep -c '<string>'` over the whole file. Two of these
+# lists hold <string> children, and counting both together made the assertion
+# that the legacy path prefix was cleared fail the moment the harness started
+# ticking libraries -- reading a correct migration, which keeps the selection and
+# drops the prefixes, as a migration that had not happened.
+config_list_length() {
+    python3 - "$PLUGIN_CONFIG" "$1" <<'PY'
+import sys, xml.etree.ElementTree as ElementTree
+node = ElementTree.parse(sys.argv[1]).getroot().find(sys.argv[2])
+print(0 if node is None else len(node))
+PY
+}
+
 # 1.0.0.7 and earlier exposed the two path settings; 1.0.0.8 removed the controls
 # and kept reading the fields, so an upgraded install carried whatever was last
 # saved and went on obeying it from a page that no longer showed it. This plants
@@ -1220,7 +1235,9 @@ run_line() {
     # say the setting was cleared and reported, rather than merely not applied.
     step "A scope setting from an older version is cleared, not honoured"
     require "the legacy path prefix is gone from the saved configuration" 0 \
-        "$(grep -c '<string>' "$PLUGIN_CONFIG" || true)"
+        "$(config_list_length FinalPathPrefixes)"
+    require "and the library selection survived the clearing" 2 \
+        "$(config_list_length EligibleLibraryIds)"
     require "the media-file check is back on" "true" \
         "$(sed -n 's|.*<RequirePathExists>\(.*\)</RequirePathExists>.*|\1|p' "$PLUGIN_CONFIG")"
     require "and the run said what it found" 2 \
