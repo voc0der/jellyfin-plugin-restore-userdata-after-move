@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.25",
+        "changelog": "## What's Changed\n\n- chore: Bump NSubstitute from 5.3.0 to 6.2.0 (#38) (dee3217)\n- chore(release): update the plugin catalogues for version 1.0.0.24 (532b817)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.24...1.0.0.25\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.25/RestoreUserDataAfterMove_1.0.0.25_jellyfin-10.11.11.zip",
+        "checksum": "2b8cdcf4a72170259bbbca30339e4405",
+        "timestamp": "2026-08-17T16:03:25Z"
+      },
+      {
         "version": "1.0.0.24",
         "changelog": "## What's Changed\n\n- chore: Bump Microsoft.NET.Test.Sdk from 18.8.1 to 18.9.0 (#37) (add35db)\n- chore(release): update the plugin catalogues for version 1.0.0.23 (91e3ab8)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.23...1.0.0.24\n",
         "targetAbi": "10.11.11.0",
