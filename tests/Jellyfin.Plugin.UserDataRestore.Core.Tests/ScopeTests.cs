@@ -10,6 +10,8 @@ public class ScopeTests
 {
     private static readonly Guid MovieId = new("74f9957e-b453-7dbb-b614-d528834acab2");
 
+    private static RecoverableLibrary Library(Guid id, params string[] locations) => new(id, locations);
+
     [Theory]
     [InlineData("/data/library/tv/Show/S01E01.mkv", "/data/library/tv", true)]
     [InlineData("/data/library/tv", "/data/library/tv", true)]
@@ -189,6 +191,85 @@ public class ScopeTests
         Assert.Equal(LibrarySelectionKind.Malformed, selection.Kind);
         Assert.Empty(selection.LibraryIds);
         Assert.Equal(["not-a-guid"], selection.MalformedValues);
+    }
+
+    [Fact]
+    public void ASelectionWhoseLibrariesAllExistResolves()
+    {
+        var resolved = LibraryScopeResolver.Resolve(
+            [Scenario.LibraryId.ToString("D"), Scenario.OtherLibraryId.ToString("D")],
+            [Library(Scenario.LibraryId, "/data/library/movies"), Library(Scenario.OtherLibraryId, "/data/library/tv")]);
+
+        Assert.Null(resolved.Refusal);
+        Assert.Equal([Scenario.LibraryId, Scenario.OtherLibraryId], resolved.LibraryIds);
+        Assert.Equal(["/data/library/movies", "/data/library/tv"], resolved.Locations);
+    }
+
+    [Fact]
+    public void OneSelectedLibraryDisappearingRefusesTheWholeRun()
+    {
+        // Delete and recreate a library and it comes back with a new ID. The
+        // survivor still intersects, so the run used to proceed against half the
+        // scope somebody chose — recovering one library, skipping the other in
+        // this run and every later one, and saying nothing while the settings page
+        // still showed both boxes ticked.
+        var resolved = LibraryScopeResolver.Resolve(
+            [Scenario.LibraryId.ToString("D"), Scenario.OtherLibraryId.ToString("D")],
+            [Library(Scenario.LibraryId, "/data/library/movies")]);
+
+        Assert.Empty(resolved.LibraryIds);
+        Assert.Contains(Scenario.OtherLibraryId.ToString("D"), resolved.Refusal);
+
+        // And it names the one that went, not the one that stayed: the message is
+        // the only thing pointing at what to go and re-tick.
+        Assert.DoesNotContain(Scenario.LibraryId.ToString("D"), resolved.Refusal);
+    }
+
+    [Fact]
+    public void EverySelectedLibraryDisappearingKeepsItsOwnRefusal()
+    {
+        var resolved = LibraryScopeResolver.Resolve(
+            [Scenario.OtherLibraryId.ToString("D")],
+            [Library(Scenario.LibraryId, "/data/library/movies")]);
+
+        Assert.Empty(resolved.LibraryIds);
+        Assert.Contains("None of the selected libraries exist", resolved.Refusal);
+    }
+
+    [Fact]
+    public void AnEmptySelectionIsRefusedWhateverTheServerHas()
+    {
+        var withLibraries = LibraryScopeResolver.Resolve([], [Library(Scenario.LibraryId, "/data/library/movies")]);
+        var withNone = LibraryScopeResolver.Resolve(null, []);
+
+        Assert.Contains("No libraries are selected", withLibraries.Refusal);
+        Assert.Contains("No movie or TV libraries were found", withNone.Refusal);
+    }
+
+    [Fact]
+    public void AnUnreadableSelectionIsRefusedBeforeTheServerIsConsulted()
+    {
+        // Ahead of the staleness check on purpose. "not-a-guid" is missing from
+        // every server, and reporting it as a library that used to exist would
+        // send an operator looking for something that never did.
+        var resolved = LibraryScopeResolver.Resolve(
+            [Scenario.LibraryId.ToString("D"), "not-a-guid"],
+            [Library(Scenario.LibraryId, "/data/library/movies")]);
+
+        Assert.Empty(resolved.LibraryIds);
+        Assert.Contains("cannot be read", resolved.Refusal);
+    }
+
+    [Fact]
+    public void ALibraryTheServerHasButNobodyTickedIsNotInScope()
+    {
+        var resolved = LibraryScopeResolver.Resolve(
+            [Scenario.LibraryId.ToString("D")],
+            [Library(Scenario.LibraryId, "/data/library/movies"), Library(Scenario.OtherLibraryId, "/data/library/tv")]);
+
+        Assert.Null(resolved.Refusal);
+        Assert.Equal([Scenario.LibraryId], resolved.LibraryIds);
+        Assert.Equal(["/data/library/movies"], resolved.Locations);
     }
 
     [Fact]

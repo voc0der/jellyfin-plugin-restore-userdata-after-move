@@ -1064,6 +1064,13 @@ Required cases:
   satisfy the identity-evidence rule.
 - Numeric IDs that collide across movie, series, and episode namespaces.
 - Conflicting state under two keys for the same user/target.
+- One snapshot's episode-level and series-derived keys resolving to *different*
+  current episodes, and the two-episodes-deleted-together case that must still
+  recover (§7.4).
+- A write's detached sources deleted, superseded, or added to between analysis
+  and save (§9.1).
+- A stored library selection that is empty, unreadable, wholly stale, or stale
+  in part (§6.1).
 - Multiple users with different state for the same item.
 - Missing and deleted users.
 - Default source state produces no write.
