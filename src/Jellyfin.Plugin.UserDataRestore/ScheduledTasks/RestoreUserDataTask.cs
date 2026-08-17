@@ -606,8 +606,16 @@ public class RestoreUserDataTask : IScheduledTask
         // the server has finished with; restoring a superseded one is worse,
         // because the newer source then reads as current_state_conflict against
         // what this run left behind and is never restored at all.
-        var sources = await reader.ReadDetachedAsync(write.UserId, write.SourceKeys, cancellationToken).ConfigureAwait(false);
-        if (SourceRevalidation.Evaluate(write.SourceFingerprints, sources) is { } stale)
+        //
+        // Asked of every key the target answers to, not only the ones that
+        // authorised the write, and of the live key set as well as the recorded
+        // one. A deletion elsewhere can strand a newer snapshot under a key this
+        // item reports but that contributed nothing here; a re-read narrowed to
+        // the contributing keys never asks about it, and Jellyfin would then fan
+        // the older state out across that key too.
+        var sentinelKeys = write.TargetKeys.Union(snapshot.UserDataKeys, StringComparer.Ordinal).ToArray();
+        var sources = await reader.ReadDetachedAsync(write.UserId, sentinelKeys, cancellationToken).ConfigureAwait(false);
+        if (SourceRevalidation.Evaluate(write.SentinelFingerprints, sources) is { } stale)
         {
             _logger.LogWarning(
                 "The stranded rows that authorised restoring user {UserId} item {ItemId} are not what the analysis read ({Reason}); skipping. "

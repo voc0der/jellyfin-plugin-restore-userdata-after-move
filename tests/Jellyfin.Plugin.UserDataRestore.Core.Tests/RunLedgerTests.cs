@@ -178,6 +178,8 @@ public class RunLedgerTests
         EvidenceRule = IdentityEvidenceRule.ImdbRule,
         SourceFingerprints = ["fingerprint"],
         SourceKeys = ["tt0133093"],
+        TargetKeys = ["tt0133093"],
+        SentinelFingerprints = ["fingerprint"],
     };
 
     private sealed class TemporaryDirectory : IDisposable

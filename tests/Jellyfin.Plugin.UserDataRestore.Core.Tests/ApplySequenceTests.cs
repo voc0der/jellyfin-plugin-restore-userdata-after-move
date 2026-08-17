@@ -277,6 +277,8 @@ public class ApplySequenceTests
         EvidenceRule = IdentityEvidenceRule.ImdbRule,
         SourceFingerprints = ["fingerprint-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)],
         SourceKeys = ["tt000000" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)],
+        TargetKeys = ["tt000000" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)],
+        SentinelFingerprints = ["fingerprint-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)],
     };
 
     private sealed record SequenceRun(

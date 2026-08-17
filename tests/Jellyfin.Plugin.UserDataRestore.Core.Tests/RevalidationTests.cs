@@ -323,6 +323,31 @@ public class RevalidationTests
     }
 
     [Fact]
+    public void APlannedWriteRecordsEveryStrandedRowUnderItsTargetsKeys()
+    {
+        // What the apply pass compares against has to be the whole sentinel
+        // picture for this pair, not the rows that happened to authorise the
+        // write. The target answers to three keys here; two carried the
+        // contributing rows and the third carries one the analysis threw out as
+        // invalid. All three are recorded, so neither a newer row arriving under
+        // the third key nor the declined row's continued presence can be
+        // misread.
+        var movie = Scenario.Movie(MovieId);
+        var declined = Scenario.Row(Scenario.UserA, MovieId.ToString("D"), rating: 99);
+
+        var result = Scenario.Analyze(
+            [Scenario.Row(Scenario.UserA, "tt0133093"), Scenario.Row(Scenario.UserA, "603"), declined],
+            [movie]);
+
+        var write = Assert.Single(result.Writes);
+
+        Assert.Equal(2, write.SourceFingerprints.Count);
+        Assert.Equal(3, write.SentinelFingerprints.Count);
+        Assert.Contains(declined.Fingerprint, write.SentinelFingerprints);
+        Assert.Equal(["603", MovieId.ToString("D"), "tt0133093"], write.TargetKeys);
+    }
+
+    [Fact]
     public void SourcesThatHaveNotChangedStillAuthoriseTheWrite()
     {
         var rows = Sources();
@@ -377,17 +402,42 @@ public class RevalidationTests
     }
 
     [Fact]
-    public void ASourceAppearingUnderTheSameKeysStopsTheWrite()
+    public void ASourceAppearingUnderAnotherTargetKeyStopsTheWrite()
     {
-        // Nothing in the analysis authorised this row, so nothing here knows what
-        // it means. Declining costs a run; guessing costs the state.
+        // Under a *different* key, because both supported schemas key UserData on
+        // (UserId, ItemId, CustomDataKey): a second row for a pair the analysis
+        // already read cannot exist, and a test that invents one proves nothing
+        // about a real server.
+        //
+        // The real shape is a third key. The target answers to tt0133093, 603 and
+        // its own GUID; two of those carried the rows this write was built from,
+        // and a deletion elsewhere then strands a newer snapshot under the third.
+        // Nothing in the analysis authorised it, and writing the old state would
+        // fan it out across that key too — after which the newer snapshot reads as
+        // a conflict against this run's own work, on every run from then on.
         var rows = Sources();
-        var live = new[] { rows[0], rows[1], Scenario.Row(Scenario.UserA, "tt0133093", favorite: false) };
+        var live = new[] { rows[0], rows[1], Scenario.Row(Scenario.UserA, MovieId.ToString("D"), playCount: 41) };
 
         var verdict = SourceRevalidation.Evaluate(Fingerprints(rows), live);
 
         Assert.NotNull(verdict);
         Assert.StartsWith(SourceRevalidation.SourceAppeared, verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RowsTheAnalysisDeclinedAreNotMistakenForNewOnes()
+    {
+        // The baseline is every detached row the user held under any key the
+        // target reports, not only the ones that authorised the write. A row the
+        // analysis deliberately left out — an impossible rating, a key a second
+        // item also answers to — still sits under a target key and is still there
+        // at write time. Recording only the contributing rows would read it as
+        // something that had just arrived and refuse the write forever.
+        var contributing = Sources();
+        var declined = Scenario.Row(Scenario.UserA, MovieId.ToString("D"), rating: 99);
+        var baseline = Fingerprints([.. contributing, declined]);
+
+        Assert.Null(SourceRevalidation.Evaluate(baseline, [.. contributing, declined]));
     }
 
     [Fact]

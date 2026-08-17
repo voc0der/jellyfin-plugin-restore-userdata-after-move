@@ -98,4 +98,9 @@ internal sealed class GroupDraft(Guid userId, CurrentItemSnapshot target)
     public RecoveryState? State { get; set; }
 
     public string EvidenceRule { get; set; } = IdentityEvidenceRule.NoneRule;
+
+    // Every detached row this user holds under any key the target reports —
+    // including the ones this group did not form from. Gathered here because only
+    // BuildCandidates has the whole detached table to gather it from.
+    public IReadOnlyList<string> SentinelFingerprints { get; set; } = [];
 }

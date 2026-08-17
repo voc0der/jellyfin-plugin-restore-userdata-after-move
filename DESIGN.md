@@ -863,11 +863,22 @@ For each remaining `ready` `(UserId, ItemId)` pair, sequentially:
    landing during the write loop, which no library scan need accompany.
 6. Check current state through `IUserDataManager`, and skip anything not at
    defaults.
-7. Re-read the detached rows this write is authorised by — the exact
-   `(UserId, CustomDataKey)` pairs the analysis recorded — and match their full
+7. Re-read the detached rows concerning this write — every row this user holds
+   under any key the target answers to, recorded and live — and match their full
    fingerprints.  Missing, replaced, or additional: skip.  The sentinel is not
    this plugin's alone (§9.1), and a write whose source has gone or been
    superseded is a write of state nothing stands behind any more.
+
+   *Every* key, not only the ones that authorised the write.  A deletion
+   elsewhere can strand a newer snapshot under a key this target also reports but
+   that contributed nothing here; a re-read narrowed to the contributing keys
+   never asks about it, Jellyfin fans the older state out across that key anyway,
+   and the newer snapshot then reads as `current_state_conflict` against this
+   run's own work on every run after.  The baseline is likewise every row that
+   existed under those keys at analysis time, *including the ones the analysis
+   declined* — an impossible rating, a key a second item also answers to.  A
+   baseline of only the contributing rows would read a declined row as something
+   that had just arrived and refuse the write forever.
 8. Re-query `UserData` row *existence* for the exact pair, against the database
    rather than through `IUserDataManager`.  The manager reports "no row" and "a
    row holding defaults" identically, and the difference between them is the

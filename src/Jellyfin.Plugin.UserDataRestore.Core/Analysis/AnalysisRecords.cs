@@ -93,6 +93,29 @@ public sealed record PlannedWrite
     /// this is what tied that row to this item.
     /// </remarks>
     public required IReadOnlyList<string> SourceKeys { get; init; }
+
+    /// <summary>Gets every key the target reported when this write was planned.</summary>
+    /// <remarks>
+    /// A superset of <see cref="SourceKeys"/>, and the difference matters. The
+    /// sentinel can gain a row under a key that contributed nothing to this write
+    /// but that the target still answers to, and such a row is newer stranded
+    /// state claiming the same item. Re-reading only the contributing keys cannot
+    /// see it (see <see cref="SentinelFingerprints"/>).
+    /// </remarks>
+    public required IReadOnlyList<string> TargetKeys { get; init; }
+
+    /// <summary>
+    /// Gets the fingerprints of every detached row this user held under
+    /// <see cref="TargetKeys"/> when the write was planned.
+    /// </summary>
+    /// <remarks>
+    /// The complete sentinel picture for this <c>(user, target)</c>, not only the
+    /// rows that authorised the write. It includes rows the analysis declined —
+    /// one with an impossible rating, one whose key another item also answers to —
+    /// precisely so that their continued presence is not mistaken for something
+    /// arriving. What <see cref="SourceRevalidation"/> compares against.
+    /// </remarks>
+    public required IReadOnlyList<string> SentinelFingerprints { get; init; }
 }
 
 /// <summary>
