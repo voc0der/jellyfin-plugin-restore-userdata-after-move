@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.20",
+        "changelog": "## What's Changed\n\n- fix(audit): fail on provenance that cannot be established, and fetch what can (0ca3c9c)\n- test(gap): count the cleared prefixes without counting the selection (0796d5e)\n- fix(apply): revalidate the sentinel across every key the target answers to (d29386c)\n- fix(analysis): let an exact GUID settle its side instead of skipping the check (0a86e85)\n- chore(release): update the plugin catalogues for version 1.0.0.19 (1f07888)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.19...1.0.0.20\n",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.20/RestoreUserDataAfterMove_1.0.0.20_jellyfin-12.0.0-rc5.zip",
+        "checksum": "1265e6dd2079501338efb91b3e62ffca",
+        "timestamp": "2026-08-17T11:04:44Z"
+      },
+      {
         "version": "1.0.0.19",
         "changelog": "## What's Changed\n\n- fix(catalogue): withdraw the mismatched 1.0.0.4 entry and audit the rest (a70628f)\n- test(gap): tick the harness's libraries, and keep its state out of Bash's (ba7f5ca)\n- test(jellyfin): cover the adapter against real Jellyfin entities (caa89ba)\n- perf(scope): stop stat-ing media outside the selected libraries (854353f)\n- fix(scope): refuse a run whose selected library has gone (dcec603)\n- fix(apply): re-check the stranded rows before each restore (5056f99)\n- fix(revalidation): look for same-series siblings before each write (a1c5971)\n- fix(analysis): refuse one stranded snapshot resolving to two episodes (036d680)\n- chore(release): update the plugin catalogues for version 1.0.0.18 (36e6e44)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.18...1.0.0.19\n",
         "targetAbi": "12.0.0.0",
