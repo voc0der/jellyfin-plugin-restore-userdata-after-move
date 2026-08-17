@@ -308,6 +308,69 @@ public class MatchingTests
     }
 
     [Fact]
+    public void AnExactGuidSettlesItsOwnSideAndRefusesTheOther()
+    {
+        // The same divergence, with one extra row: episode A's snapshot also
+        // survives under A's own item GUID. That key is identity itself, so where
+        // that snapshot belongs is no longer in question — which leaves B's claim
+        // on the same payload the only doubtful one.
+        //
+        // The first version of this check excluded any candidate carrying a GUID
+        // key, on the reasoning that such a row is not in doubt. True of the row,
+        // and backwards as a rule: it took the strongest evidence on the page as a
+        // reason to stop looking, so the pair was skipped and *both* writes went
+        // through — the exact outcome the check exists to prevent.
+        var a = Scenario.Episode(EpisodeId, SeriesId, seriesImdb: null, path: "/data/library/tv/A/S01E01.mkv") with
+        {
+            UserDataKeys = ["tt7654321", EpisodeId.ToString("D")],
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Imdb"] = "tt7654321" },
+        };
+
+        var b = Scenario.Episode(OtherEpisodeId, OtherSeriesId, seriesImdb: "tt0903747", path: "/data/library/tv/B/S01E01.mkv");
+
+        var result = Scenario.Analyze(
+            [
+                Scenario.Row(Scenario.UserA, "tt7654321"),
+                Scenario.Row(Scenario.UserA, EpisodeId.ToString("D")),
+                Scenario.Row(Scenario.UserA, "tt0903747001001"),
+            ],
+            [a, b]);
+
+        var write = Assert.Single(result.Writes);
+        Assert.Equal(EpisodeId, write.ItemId);
+        Assert.Equal(IdentityEvidenceRule.CurrentItemGuidRule, write.EvidenceRule);
+        Assert.Equal(1, result.CandidateCounts[ReasonCode.AmbiguousSourceAttribution]);
+    }
+
+    [Fact]
+    public void TwoEpisodesEachProvenByTheirOwnGuidAreBothRecovered()
+    {
+        // Both sides carry a row written under their own item GUID, so each
+        // snapshot is accounted for by the item that names it. Matching payloads
+        // across the two are a batch deletion, not a contradiction, and refusing
+        // them would throw away the strongest evidence this analyzer has.
+        var a = Scenario.Episode(EpisodeId, SeriesId, seriesImdb: null, path: "/data/library/tv/A/S01E01.mkv") with
+        {
+            UserDataKeys = ["tt7654321", EpisodeId.ToString("D")],
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Imdb"] = "tt7654321" },
+        };
+
+        var b = Scenario.Episode(OtherEpisodeId, OtherSeriesId, seriesImdb: "tt0903747", path: "/data/library/tv/B/S01E01.mkv");
+
+        var result = Scenario.Analyze(
+            [
+                Scenario.Row(Scenario.UserA, "tt7654321"),
+                Scenario.Row(Scenario.UserA, EpisodeId.ToString("D")),
+                Scenario.Row(Scenario.UserA, "tt0903747001001"),
+                Scenario.Row(Scenario.UserA, OtherEpisodeId.ToString("D")),
+            ],
+            [a, b]);
+
+        Assert.Equal(0, result.CandidateCounts[ReasonCode.AmbiguousSourceAttribution]);
+        Assert.Equal(2, result.Writes.Count);
+    }
+
+    [Fact]
     public void TwoEpisodesStrandedTogetherAreStillBothRecovered()
     {
         // The false positive the rule above must not produce. A batch deletion

@@ -155,6 +155,8 @@ public static class DetachedUserDataAnalyzer
             pending.Add(group);
         }
 
+        RecordSentinelState(pending, input.DetachedRows);
+
         foreach (var contradicted in FindDivergentEpisodeAttribution(pending))
         {
             pending.Remove(contradicted);
@@ -247,6 +249,11 @@ public static class DetachedUserDataAnalyzer
                         .Select(k => k.Row.CustomDataKey!)
                         .Distinct(StringComparer.Ordinal)
                         .Order(StringComparer.Ordinal)],
+                    TargetKeys = [.. group.Target.UserDataKeys
+                        .Where(key => !string.IsNullOrEmpty(key))
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)],
+                    SentinelFingerprints = group.SentinelFingerprints,
                 });
             }
         }
@@ -262,6 +269,74 @@ public static class DetachedUserDataAnalyzer
             CandidateCounts = Tally(allCandidates.Select(c => c.Reason)),
             Diagnostics = candidates.Diagnostics,
         };
+    }
+
+    /// <summary>
+    /// Records, for each remaining candidate, the whole of the sentinel that
+    /// concerns it — every detached row this user holds under any key the target
+    /// reports (DESIGN §9.1).
+    /// </summary>
+    /// <remarks>
+    /// <para>Not just the rows the candidate was built from. Between the analysis
+    /// and the write, another deletion can strand a <i>newer</i> snapshot under a
+    /// key this target also answers to but that contributed nothing here — and a
+    /// re-read of only the contributing keys never asks about it. The old state
+    /// would then be written, Jellyfin would fan it out across every key the
+    /// target reports including that one, and the newer snapshot would read as
+    /// <c>current_state_conflict</c> against it on that run and every run after.
+    /// The stale answer becomes permanent.</para>
+    /// <para>Recording the rows the analysis <i>declined</i> matters as much as
+    /// recording the ones it used. A row with an impossible rating, or one whose
+    /// key a second item also answers to, sits under a target key and was
+    /// deliberately left out of the candidate. If the baseline held only the
+    /// contributing rows, that row would look like something that had just
+    /// arrived, and every write with one nearby would be refused forever.</para>
+    /// </remarks>
+    private static void RecordSentinelState(
+        IReadOnlyList<GroupDraft> pending,
+        IReadOnlyList<DetachedUserDataRow> detachedRows)
+    {
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var byUserAndKey = new Dictionary<(Guid UserId, string Key), List<DetachedUserDataRow>>();
+        foreach (var row in detachedRows)
+        {
+            if (string.IsNullOrEmpty(row.CustomDataKey))
+            {
+                continue;
+            }
+
+            var pair = (row.UserId, row.CustomDataKey);
+            if (!byUserAndKey.TryGetValue(pair, out var bucket))
+            {
+                bucket = [];
+                byUserAndKey[pair] = bucket;
+            }
+
+            bucket.Add(row);
+        }
+
+        foreach (var group in pending)
+        {
+            var fingerprints = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var key in group.Target.UserDataKeys)
+            {
+                if (string.IsNullOrEmpty(key) || !byUserAndKey.TryGetValue((group.UserId, key), out var rows))
+                {
+                    continue;
+                }
+
+                foreach (var row in rows)
+                {
+                    fingerprints.Add(row.Fingerprint);
+                }
+            }
+
+            group.SentinelFingerprints = [.. fingerprints.Order(StringComparer.Ordinal)];
+        }
     }
 
     /// <summary>
@@ -288,9 +363,12 @@ public static class DetachedUserDataAnalyzer
     /// <i>missing</i> the key the other has. An episode whose own IMDb key and
     /// series-derived key both point at it produces one complete group, not two
     /// half ones; two episodes deleted in the same sweep each keep both halves,
-    /// however alike their state. A group carrying the current item's own GUID is
-    /// left out entirely: that key is item identity itself, so a row bearing it is
-    /// not a row whose attribution is in doubt.</para>
+    /// however alike their state.</para>
+    /// <para>A row stored under the current item's own GUID settles where its
+    /// snapshot belongs — that key <i>is</i> item identity — so a side carrying
+    /// one is kept and only the side with nothing to stand on is refused. Both
+    /// sides carrying one is not a contradiction at all: each item accounts for
+    /// its own snapshot, and the matching payloads are a batch deletion.</para>
     /// </remarks>
     private static IReadOnlyList<GroupDraft> FindDivergentEpisodeAttribution(IReadOnlyList<GroupDraft> pending)
     {
@@ -310,8 +388,35 @@ public static class DetachedUserDataAnalyzer
                         continue;
                     }
 
-                    contradicted.Add(own);
-                    contradicted.Add(series);
+                    var ownProven = ProvenByItemGuid(own);
+                    var seriesProven = ProvenByItemGuid(series);
+
+                    // Both sides hold a row stored under the current item's own
+                    // GUID, so each snapshot is accounted for by the item it
+                    // names. Identical payloads are then what a batch deletion
+                    // looks like, not a contradiction.
+                    if (ownProven && seriesProven)
+                    {
+                        continue;
+                    }
+
+                    // Otherwise the proven side stands and only the side with
+                    // nothing to stand on is refused. A GUID key is item identity
+                    // itself: the row was written for exactly that item, which
+                    // settles where that snapshot belongs and leaves the *other*
+                    // claim on it the one in doubt. Excluding a GUID-bearing
+                    // candidate from this check entirely — as the first version of
+                    // it did — read that strength backwards, and let the
+                    // unsupported write through beside the proven one.
+                    if (!ownProven)
+                    {
+                        contradicted.Add(own);
+                    }
+
+                    if (!seriesProven)
+                    {
+                        contradicted.Add(series);
+                    }
                 }
             }
         }
@@ -319,10 +424,13 @@ public static class DetachedUserDataAnalyzer
         return [.. contradicted.Distinct()];
     }
 
+    private static bool ProvenByItemGuid(GroupDraft group) =>
+        group.Keys.Any(key => key.Evidence == KeyEvidence.CurrentItemGuid);
+
     private static bool Carries(GroupDraft group, KeyEvidence required, KeyEvidence disqualifying) =>
         group.Target.Kind == ItemKind.Episode
         && group.Keys.Any(key => key.Evidence == required)
-        && !group.Keys.Any(key => key.Evidence == disqualifying || key.Evidence == KeyEvidence.CurrentItemGuid);
+        && !group.Keys.Any(key => key.Evidence == disqualifying);
 
     private static bool SharesAPayload(GroupDraft left, GroupDraft right)
     {

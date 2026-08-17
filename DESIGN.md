@@ -625,9 +625,19 @@ recoveries.  What distinguishes the contradictory shape is that each side is
 *missing* the key the other has.  A genuine fan-out arrives whole — an episode
 whose own IMDb key and series-derived key both point at it produces one complete
 group, not two half ones — and two episodes deleted in the same sweep each keep
-both halves however alike their state.  A group carrying the current item's own
-GUID is excluded outright: that key is item identity itself, so a row bearing it
-is not a row whose attribution is in doubt.
+both halves however alike their state.
+
+A row stored under the current item's own GUID is the one thing that settles the
+question outright — that key *is* item identity, so the row was written for
+exactly that item.  It does not follow that the check should stand down when it
+sees one.  The first version of this rule excluded any candidate carrying a GUID
+key, reasoning that such a row is not in doubt; true of the row, and backwards as
+a rule, because it took the strongest evidence available as grounds to stop
+looking and let the *unsupported* claim on the same snapshot through beside the
+proven one.  So: the proven side stands, the unproven side is refused, and two
+sides each carrying their own item's GUID are not in conflict at all — each
+snapshot is accounted for by the item that names it, and the matching payloads
+are a batch deletion.
 
 ### 7.5 Inspect the current target
 
