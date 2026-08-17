@@ -52,3 +52,11 @@ jobs:
     # comment nobody reads while editing the file it sits in.
     - name: Check the release workflow still queues every commit
       run: python3 .github/workflows/check-release-concurrency.py
+
+    # Same shape of silence, one workflow over. The live proof runs one job per
+    # server line, so the list of lines exists in the harness and again in the
+    # matrix, and a line added to only the first is never run by anything —
+    # while every check stays green and the summary still reports a passing live
+    # proof.
+    - name: Check the live proof still covers every server line
+      run: python3 .github/workflows/check-live-matrix.py

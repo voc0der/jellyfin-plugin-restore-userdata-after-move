@@ -1,0 +1,220 @@
+name: Live server proof
+
+# The one question no other workflow here can answer: does the plugin actually
+# put the data back, on a real Jellyfin, through Jellyfin's own user-data
+# manager?
+#
+# Everything below the HTTP boundary is covered without a server in sight, and
+# the database suite gets closer than the rest -- the host's real
+# JellyfinDbContext, its real entity model, and both servers' Entity Framework
+# providers doing the translating. It still substitutes
+# IJellyfinDatabaseProvider, and not by preference: Jellyfin publishes
+# Jellyfin.Database.Implementations to NuGet and does not publish the SQLite
+# provider that configures it, so every convention the server layers onto that
+# model -- its UTC handling among them -- exists only inside a running server.
+# A defect living purely in that layer passes every other suite in this repo.
+#
+# scripts/gap/gap.sh is what reaches it, and until now it reached it only when
+# somebody remembered to run it by hand. That made the answer exactly as current
+# as the last time anybody asked, which for a plugin whose entire risk surface
+# is host interaction is the wrong thing to leave to memory.
+
+on:
+  # Every push, no path filter, because every push to main cuts a release: if a
+  # commit is going out to people's servers, the claim that it works on one
+  # should be no older than that commit.
+  push:
+    branches: [ main ]
+
+  # For pull requests the filter is worth having: each line stands up its own
+  # Jellyfin, builds a library, breaks it and rebuilds it, which is too much to
+  # spend on a README edit. These are the paths that change what a server sees.
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'build.sh'
+      - 'scripts/gap/**'
+      - 'Directory.Build.props'
+      - '.github/workflows/live-gap.yml'
+
+  # Weekly, and not for the usual reason. Both server versions are pinned to
+  # exact tarballs and the code under test is whatever the commit says, so a
+  # scheduled run over an unchanged repository re-tests identical inputs and can
+  # only ever agree with itself. What it actually watches is the harness's own
+  # footing: repo.jellyfin.org still serving those two files, the runner image
+  # still carrying the tools gap.sh needs, a new image still able to run a
+  # Jellyfin built against an older glibc. Those drift without anybody
+  # committing anything, and they take the live proof down with them.
+  #
+  # Worth knowing: GitHub disables scheduled workflows after 60 days without
+  # repository activity, and says so only by email. If this stops appearing,
+  # that is the first thing to check.
+  schedule:
+    - cron: '41 4 * * 2'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deliberately no concurrency group. The pending slot is where runs get dropped
+# -- release.yml carries the long version of that story, and a check script to
+# keep it from coming back -- and the failure mode here is the same shape:
+# the run that vanishes is the one nobody goes looking for. These jobs share no
+# port, no directory and no server, since every one of them gets its own
+# machine, so there is nothing for a group to protect and a commit whose live
+# proof was silently skipped is a real cost. Let them all run.
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+
+    # A matrix rather than one `gap.sh` with no arguments, which would run both
+    # lines in a single process. That stops at the first failure, so a break in
+    # 10.11.11 would leave 12.0 untested and the report would say nothing about
+    # the half that might be fine. One job per line: both always run, both get
+    # their own log, and the two finish in the time of the slower one.
+    strategy:
+      fail-fast: false
+      matrix:
+        line: [ '10.11.11', '12.0-rc5' ]
+
+    # Both lines and the build take 16m35s on a developer machine, and a job here
+    # runs one of them. The rest is headroom for a slower runner and a cold
+    # 110MB download -- generous on purpose, since the thing this bounds is a
+    # server that hung, and the alternative to a bound is six hours of one.
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          9.0.x
+          10.0.x
+
+    # Everything else gap.sh needs is already on the image -- jq, sqlite3, curl,
+    # tar, unzip, zip, python3 -- and ffmpeg is not. It is not optional here:
+    # the fixtures are real encoded video, because the subject is what Jellyfin
+    # does with a library it has actually scanned, and gap.sh refuses to start
+    # without it rather than half-building one.
+    - name: Install ffmpeg
+      run: |
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 ffmpeg
+
+    # The tarball name is read out of gap.sh rather than written here, so the
+    # cache key follows a version bump on its own: change the pinned server and
+    # the key changes with it, which is the difference between a cache that
+    # refreshes itself and one that quietly serves last year's server forever.
+    - name: Find the server tarball this line pins
+      id: server
+      run: |
+        archive=$(grep -o "jellyfin_${{ matrix.line }}[^|\"]*\.tar\.gz" scripts/gap/gap.sh | head -1)
+        [ -n "$archive" ] || {
+          echo "scripts/gap/gap.sh pins no tarball for ${{ matrix.line }}." >&2
+          exit 1
+        }
+        echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+    # Only the tarball, not the tree gap.sh extracts from it: unpacking costs
+    # seconds and caching it would triple what has to move over the wire. Keyed
+    # per line because each job downloads only its own, and a shared key would
+    # let whichever finished first decide what the other one found next time.
+    - name: Restore the Jellyfin server tarball
+      id: cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.cache/jellyfin-gap/${{ steps.server.outputs.archive }}
+        key: jellyfin-server-${{ steps.server.outputs.archive }}
+
+    # --keep, so the tree survives for the artifact step below; the runner is
+    # thrown away either way. --scratch puts it somewhere known, since the
+    # default is a mktemp directory whose name only the log knows.
+    - name: Prove it against a real Jellyfin ${{ matrix.line }}
+      run: |
+        set -o pipefail
+        scripts/gap/gap.sh --keep --scratch "$RUNNER_TEMP/gap" '${{ matrix.line }}' \
+          2>&1 | tee "$RUNNER_TEMP/gap-run.log"
+
+    # Split from the restore, and saved even when the run failed, because a red
+    # run is the one that gets re-run: the whole point of this harness is to
+    # fail informatively, and a failure that also threw away the 110MB server it
+    # had just fetched would make every diagnostic re-run pay for it again --
+    # out of repo.jellyfin.org's bandwidth, not ours. The plain `cache` action
+    # skips its save step entirely when the job is failing, which is the wrong
+    # trade here.
+    #
+    # The archive check is not redundant with always(): if the lookup step is
+    # what failed, this one still runs, and an empty name would key a cache
+    # entry `jellyfin-server-` over the whole directory.
+    - name: Save the Jellyfin server tarball
+      if: >-
+        always()
+        && steps.server.outputs.archive != ''
+        && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.cache/jellyfin-gap/${{ steps.server.outputs.archive }}
+        key: jellyfin-server-${{ steps.server.outputs.archive }}
+
+    - name: Report what held
+      if: always()
+      run: |
+        {
+          echo "### Jellyfin ${{ matrix.line }}"
+          echo ""
+          if [ -f "$RUNNER_TEMP/gap-run.log" ]; then
+            passed=$(grep -c '^   + ' "$RUNNER_TEMP/gap-run.log" || true)
+            echo "- Assertions passed: **${passed}**"
+            echo "- Server: \`${{ steps.server.outputs.archive }}\`"
+            if grep -q '^FAILED' "$RUNNER_TEMP/gap-run.log"; then
+              echo ""
+              echo "The assertion that failed:"
+              echo ""
+              echo '```'
+              grep -A4 '^FAILED' "$RUNNER_TEMP/gap-run.log" | head -20
+              echo '```'
+            fi
+          else
+            echo "The harness produced no output; it did not get as far as starting."
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    # Only on failure, and only the parts that answer "why". The plan files
+    # carry the classification for every row and candidate, which is where the
+    # answer usually is; the server log carries what Jellyfin thought of it; the
+    # database is small and lets the whole thing be re-examined offline. The
+    # media fixtures are excluded -- they are generated, identical every run,
+    # and by far the largest thing in the tree.
+    - name: Collect the evidence a failure needs
+      if: failure()
+      run: |
+        dest="$RUNNER_TEMP/gap-evidence"
+        mkdir -p "$dest"
+        cp "$RUNNER_TEMP/gap-run.log" "$dest/harness.log" 2>/dev/null || true
+
+        scratch="$RUNNER_TEMP/gap/${{ matrix.line }}"
+        if [ -d "$scratch" ]; then
+          cp "$scratch/server.log" "$dest/" 2>/dev/null || true
+          find "$scratch/log" -name '*.log' -exec cp {} "$dest/" \; 2>/dev/null || true
+          find "$scratch/data" -name 'plan-*.json' -exec cp {} "$dest/" \; 2>/dev/null || true
+          find "$scratch/data" -name '*.xml' -path '*plugin*' -exec cp {} "$dest/" \; 2>/dev/null || true
+          find "$scratch/data" -maxdepth 3 \( -name 'jellyfin.db' -o -name 'library.db' \) \
+            -exec cp {} "$dest/" \; 2>/dev/null || true
+        else
+          echo "no scratch tree at $scratch" > "$dest/NO-SCRATCH.txt"
+        fi
+        ls -la "$dest"
+
+    - name: Upload the evidence
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: live-gap-${{ matrix.line }}
+        path: ${{ runner.temp }}/gap-evidence
+        if-no-files-found: warn
+        retention-days: 14

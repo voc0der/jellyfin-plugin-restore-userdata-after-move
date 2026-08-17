@@ -85,6 +85,30 @@ library that was never broken proves nothing.
 - A library scan afterwards completes, and the server logs nothing at error
   level once the run begins.
 
+## Where it runs
+
+Here, and in CI on every push to `main`, every pull request that touches
+behaviour, and once a week — `.github/workflows/live-gap.yml`.
+
+That last one is not the usual drift check. Both servers are pinned to exact
+tarballs and the code under test is whatever the commit says, so a weekly run
+over an unchanged repository re-tests identical inputs and can only agree with
+itself. What it watches is this script's own footing: `repo.jellyfin.org` still
+serving those two files, the runner image still carrying the tools below, a new
+image still able to run a Jellyfin built against an older glibc. Those move
+without anybody committing anything, and they take the live proof down with them.
+
+CI runs one job per server line rather than one run covering both, because this
+script stops at the first failed assertion and a break in 10.11.11 would
+otherwise leave 12.0 untested. A failing job uploads the server log, every plan
+file, the plugin's saved configuration and the database as an artifact, which is
+the same evidence `--keep` leaves behind locally.
+
+If you add a server line here, add it to that workflow's matrix too.
+`.github/workflows/check-live-matrix.py` fails the lint run if you don't — a line
+this script supports and CI never starts is invisible otherwise, since every
+check still passes.
+
 ## One thing worth knowing before you extend it
 
 **Do not open Jellyfin's database from another process while Jellyfin is
@@ -119,9 +143,13 @@ stranded rows would pass vacuously. Keep the guard.
 
 ## Requirements
 
-`curl`, `jq`, `sqlite3`, `ffmpeg`, `unzip`, `tar`, `dotnet`, and network access
-to `repo.jellyfin.org` for the first run. Servers are cached under
+`curl`, `jq`, `sqlite3`, `ffmpeg`, `unzip`, `tar`, `dotnet` and `python3`, all
+checked before anything starts, plus `zip` for the build it runs. Network access
+to `repo.jellyfin.org` is needed for the first run; servers are cached under
 `~/.cache/jellyfin-gap`, so later runs are offline and much faster.
+
+GitHub's `ubuntu-latest` image carries every one of those except `ffmpeg`, which
+is why the workflow installs exactly that and nothing else.
 
 ## What it will not do
 
@@ -139,3 +167,8 @@ Every assertion reports what was expected against what the server actually did,
 followed by the scratch path and the server log. The plan files under
 `<scratch>/<line>/data/plugins/**/plan-*.json` carry the full classification for
 every row and candidate, which is usually where the answer is.
+
+From a CI failure, the same things are in the `live-gap-<line>` artifact on the
+run, and the job summary names the assertion that failed. The scratch tree
+itself is gone with the runner, so if you need to reproduce, the artifact is
+what you have — which is why the database is in it.

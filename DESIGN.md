@@ -1202,6 +1202,23 @@ the SQLite provider and any other provider Coldarr intends to claim support for.
 - Analyze and task cancellation do not leave transactions or database locks.
 - Plan and ledger files publish atomically.
 
+What exists runs the reader's queries against the host's own `JellyfinDbContext`
+and entity model over a throwaway SQLite database, once per supported server's
+provider — Entity Framework 9.0.11 for 10.11.11, 10.0.10 for 12.0.  Both, because
+a query one provider translates is not automatically one the other translates,
+and an untranslatable expression is a runtime failure: nothing the compiler can
+see, nothing a core test can see, and on a server it surfaces part-way through a
+restore as a run that stopped.
+
+It stops one layer short of a server, and not by preference.
+`IJellyfinDatabaseProvider` is substituted because Jellyfin publishes
+`Jellyfin.Database.Implementations` to NuGet and does not publish the SQLite
+provider that configures it.  Every convention the server layers onto that model
+— its UTC handling among them — therefore exists only inside a running server,
+and a defect living purely there passes this suite and every other one in the
+repository.  Reaching it is what §12.3 is for, which is why §12.3 is not
+optional and does not run only when somebody remembers it.
+
 ### 12.3 Disposable-server integration suite
 
 Run the same black-box scenario on Jellyfin 10.11.11 and 12.0 RC5/stable:
@@ -1242,6 +1259,41 @@ Add focused integration cases for:
 - Source tombstone changed or disappeared after planning.
 - Library scan already running when apply starts.
 - An accidentally configured apply schedule while the plugin is unarmed.
+
+This is `scripts/gap/gap.sh`, and it is the only thing in the repository that
+reaches the layer §12.2 cannot: a real server, its real provider, its own
+user-data manager, and its own key fan-out.  It builds the plugin, stands up a
+disposable Jellyfin from the official tarball, strands user data by moving files
+the way an operator's mover moves them, runs the scheduled task, and asserts what
+this document claims — reading the database only in windows where the server is
+stopped, for the reason recorded in `scripts/gap/README.md`.
+
+It runs in CI, in `.github/workflows/live-gap.yml`, and that is a load-bearing
+part of it rather than a convenience.  Run by hand, the answer to "does this work
+on a real server" is only ever as current as the last time somebody thought to
+ask, which for a plugin whose entire risk surface is host interaction is the
+wrong thing to leave to memory.  Every push to `main` cuts a release, so every
+push to `main` runs it.
+
+Two details of that arrangement are deliberate:
+
+- **One job per server line, not one run covering both.**  A single process stops
+  at the first failed assertion, so a break in 10.11.11 would leave 12.0
+  unexercised and the report would say nothing about the half that might be
+  fine.  Split, both always run, and both are still finished in the time of the
+  slower one.
+- **No concurrency group.**  A group's *pending* slot is where runs get dropped —
+  the hazard the release workflow carries `check-release-concurrency.py` to keep
+  out.  These jobs share nothing, each getting its own machine, port and
+  directory, so a group would protect nothing here and could silently skip a
+  commit's live proof.
+
+The list of server lines now exists in two files, the harness and the job matrix,
+which is its own quiet failure: a line added to the harness alone is never run by
+anything, and every check stays green because from CI's side nothing is missing.
+`.github/workflows/check-live-matrix.py` compares the two on every lint run, and
+also checks that each line has a server tarball pinned, since the matrix derives
+its cache key from that name.
 
 ### 12.4 Failure injection
 

@@ -37,6 +37,26 @@ assembly, so they can be tested without a server. Keep them there. If a change
 needs a Jellyfin type to be tested, that is usually a sign the logic belongs in
 the core with the host type mapped at the boundary.
 
+Above that sit two suites the boundary makes necessary: one that builds real
+`Movie`, `Episode` and `Series` entities to check what the adapter asks the
+server for, and one that runs the database reads against the host's own
+`JellyfinDbContext` on both servers' Entity Framework providers, since a query
+one translates is not automatically one the other does.
+
+Past all of them is [`scripts/gap/gap.sh`](scripts/gap/gap.sh), which stands up a
+throwaway Jellyfin, strands user data by moving files, and proves the restore on
+a real server:
+
+```bash
+scripts/gap/gap.sh                 # both server lines, around 17 minutes
+scripts/gap/gap.sh 10.11.11        # one, and about half that
+```
+
+You do not have to run it — CI runs it on every push and on any pull request
+that touches `src/`, `build.sh` or the harness — but if you are changing what
+the plugin asks of Jellyfin, it is the only thing that will tell you the truth.
+Nothing else in the repository starts a server.
+
 ## Linting
 
 Run lint checks locally before opening a PR:
@@ -44,7 +64,13 @@ Run lint checks locally before opening a PR:
 ```bash
 dotnet format whitespace --verify-no-changes
 dotnet format style --verify-no-changes --severity warn
+python3 .github/workflows/check-release-concurrency.py
+python3 .github/workflows/check-live-matrix.py
 ```
+
+The last two guard invariants that fail silently rather than loudly: that every
+commit still gets its own release, and that CI's live proof still covers every
+server line the harness supports.
 
 ## Before changing behaviour
 
