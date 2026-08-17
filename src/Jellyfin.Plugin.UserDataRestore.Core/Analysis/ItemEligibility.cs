@@ -80,14 +80,22 @@ public static class ItemEligibility
             return ItemExclusion.VirtualOrExtra;
         }
 
-        if (string.IsNullOrWhiteSpace(item.Path) || (options.RequirePathExists && !item.PathExists))
-        {
-            return ItemExclusion.MissingPath;
-        }
-
+        // Membership before the path, and the order is load-bearing rather than
+        // arbitrary. Every current movie and episode on the server is collected,
+        // most of them in libraries nobody ticked, and asking about a file in one
+        // of those answers a question no verdict depends on: an item outside the
+        // selection is excluded whatever its file is doing. Asking anyway made a
+        // library the operator deliberately left out — an offline NFS share, a
+        // detached USB disk — count towards the "a mount is probably missing"
+        // warning about the libraries they did tick.
         if (!item.LibraryIds.Intersect(options.EligibleLibraryIds).Any())
         {
             return ItemExclusion.LibraryNotConfigured;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Path) || (options.RequirePathExists && !item.PathExists))
+        {
+            return ItemExclusion.MissingPath;
         }
 
         if (!PathScope.IsBeneathAny(item.Path, options.FinalPathPrefixes, options.PathComparison))

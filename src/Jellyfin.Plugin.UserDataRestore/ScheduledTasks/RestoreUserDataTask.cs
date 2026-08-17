@@ -108,9 +108,15 @@ public class RestoreUserDataTask : IScheduledTask
     /// row honestly reports as unmatchable.
     ///
     /// So it ships inert. Add a trigger here in Dashboard -> Scheduled Tasks,
-    /// timed to land after your own pipeline, and run it from here too. Repeat
-    /// runs are no-ops by construction, so an over-frequent trigger costs nothing
-    /// but log lines.
+    /// timed to land after your own pipeline, and run it from here too.
+    ///
+    /// Repeat runs are no-ops by construction, but that is a claim about the
+    /// writes, not about the work: every run still fingerprints the whole
+    /// UserData table twice, reads every detached row, walks every movie and
+    /// episode on the server, stats the file behind each one in a selected
+    /// library, and writes a plan. An over-frequent trigger therefore costs
+    /// rather more than log lines, and how much more has not been measured at
+    /// scale (DESIGN section 12.5).
     /// </remarks>
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 

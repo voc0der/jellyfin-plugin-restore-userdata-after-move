@@ -21,10 +21,14 @@ namespace Jellyfin.Plugin.UserDataRestore.Jellyfin;
 /// a bare <c>no_current_key_match</c>, and a key exposed by both an eligible item
 /// and an out-of-scope one is correctly ambiguous rather than confidently
 /// wrong.</para>
+/// <para>Collecting every item is not the same as touching every item's storage.
+/// Keys are read from all of them; the media file is stat-ed only for items in a
+/// selected library, because that is the only place the answer changes a verdict
+/// (see <see cref="ProbeIfWorthIt"/>).</para>
 /// <para>Keys come from each item's own <c>GetUserDataKeys()</c>. This class does
 /// not know how Jellyfin builds them and must not learn.</para>
 /// </remarks>
-public sealed class LibraryItemCollector(ILibraryManager libraryManager)
+public sealed class LibraryItemCollector(ILibraryManager libraryManager, Func<string?, bool>? probePath = null)
 {
     /// <summary>
     /// Provider IDs must be hydrated, or the whole plugin quietly does nothing.
@@ -45,15 +49,20 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
 
     private readonly ILibraryManager _libraryManager = libraryManager;
 
+    // Injected so a test can count the calls. What matters about this predicate
+    // is not only what it answers but how often it is asked: it is a synchronous
+    // stat, and the whole of DESIGN's cost story for a narrowly scoped run rests
+    // on it never touching storage the operator left out of scope.
+    private readonly Func<string?, bool> _probePath = probePath ?? PathExists;
+
     /// <summary>
     /// Collects the current catalog.
     /// </summary>
     /// <param name="configuredLibraryIds">The libraries an operator marked eligible.</param>
     /// <param name="checkPathExists">
-    /// Whether the media file behind each item must be stat-ed. When false the
-    /// filesystem is not touched at all: this runs once per movie and episode on
-    /// the server, and on a network mount it is the slowest thing in the pass, so
-    /// paying for an answer nothing will read is pure waste.
+    /// Whether the media file behind an in-scope item must be stat-ed. When false
+    /// the filesystem is not touched at all; when true it is touched only for
+    /// items in a selected library.
     /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>One snapshot per current movie and episode.</returns>
@@ -317,7 +326,7 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
     private static bool PathExists(string? path) =>
         !string.IsNullOrEmpty(path) && (File.Exists(path) || Directory.Exists(path));
 
-    private static CurrentItemSnapshot ToSnapshot(
+    private CurrentItemSnapshot ToSnapshot(
         BaseItem item,
         IReadOnlyDictionary<Guid, List<Guid>> membership,
         IReadOnlyDictionary<Guid, Dictionary<string, string>> seriesProviderIds,
@@ -332,19 +341,21 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
             seriesProviders = found;
         }
 
+        // Only ever holds libraries the operator selected — BuildMembership walks
+        // the selection, not the server — so an empty list is exactly "this item
+        // is out of scope".
+        IReadOnlyList<Guid> libraries = membership.TryGetValue(item.Id, out var owning) ? owning : [];
+
         return new CurrentItemSnapshot
         {
             ItemId = item.Id,
             Kind = ClassifyKind(item),
             Name = item.Name,
             Path = item.Path,
-            // Not stat-ed at all when the check is off: an item is then treated as
-            // present, which is what "do not require the path to exist" means, and
-            // ItemEligibility will not look at this field either way.
-            PathExists = !checkPathExists || (item.IsFileProtocol && PathExists(item.Path)),
+            PathExists = ProbeIfWorthIt(item, libraries, checkPathExists),
             IsVirtualItem = item.IsVirtualItem,
             IsExtraOrTrailer = item.ExtraType.HasValue,
-            LibraryIds = membership.TryGetValue(item.Id, out var libraries) ? libraries : [],
+            LibraryIds = libraries,
             UserDataKeys = item.GetUserDataKeys(),
             ProviderIds = item.ProviderIds ?? [],
             SeriesProviderIds = seriesProviders,
@@ -353,6 +364,30 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
             EpisodeNumber = episode?.IndexNumber,
         };
     }
+
+    /// <summary>
+    /// Stats the media file, but only when some verdict depends on the answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two ways out without touching the filesystem, and both report the
+    /// item as present because that is the value <see cref="ItemEligibility"/>
+    /// will not consult.</para>
+    /// <para>The check being off is the simple one: "do not require the path to
+    /// exist" means exactly that, and paying for an answer nothing reads is pure
+    /// waste — this runs once per movie and episode on the server, and on a
+    /// network mount the stat is the slowest thing in the pass.</para>
+    /// <para>The item being outside the selection is the one that matters. Every
+    /// movie and episode is collected, in scope or not, because a key claimed by
+    /// an unselected item still makes that key ambiguous and the run still has to
+    /// see it. Its <i>file</i> decides nothing: membership is checked first, so an
+    /// unselected item is excluded whatever the stat would have said. Asking anyway
+    /// dragged a whole run through storage the operator had deliberately left out
+    /// of scope — a slow or unavailable NFS mount could stall a task scoped to one
+    /// small local library for minutes, and every missing file out there counted
+    /// towards the missing-mount warning about the libraries that were ticked.</para>
+    /// </remarks>
+    private bool ProbeIfWorthIt(BaseItem item, IReadOnlyList<Guid> libraries, bool checkPathExists) =>
+        !checkPathExists || libraries.Count == 0 || (item.IsFileProtocol && _probePath(item.Path));
 
     private Dictionary<Guid, Dictionary<string, string>> BuildSeriesProviderIds(CancellationToken cancellationToken)
     {

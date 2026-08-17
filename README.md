@@ -187,9 +187,18 @@ the library scan that follows it. Daily at 3am is a fine answer if nothing else
 suggests one. That page is also where you run it by hand and where its results
 appear.
 
-An over-frequent trigger costs nothing but log lines — repeat runs are no-ops —
-so err towards later rather than tighter. A run that fires mid-move reports
+Err towards later rather than tighter. A run that fires mid-move reports
 everything as ambiguous and does nothing useful; the next one catches it.
+
+A repeat run is a no-op in the sense that matters — it will not write anything a
+previous run already restored, and it cannot undo something you have since
+changed — but "no-op" describes the *writes*, not the work. Every run
+fingerprints the whole `UserData` table twice, reads every detached row,
+enumerates every movie and episode on the server, stats the media file behind
+each one in a selected library, and writes a plan. On the largest install this
+has been pointed at, that is around 31,000 items and 20,000 rows a time. The
+cost of that pass at scale has not been measured (DESIGN §12.5), so treat daily
+as the recommendation and anything hourly as your own experiment.
 
 Results appear in the task's summary and the server log; the full detail is in a
 plan file under `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
