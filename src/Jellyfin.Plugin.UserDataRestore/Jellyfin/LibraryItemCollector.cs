@@ -184,10 +184,15 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
     /// exactly the gap the run-level index already covers, so a write must still
     /// satisfy both and this can only ever make a run more conservative, never
     /// less.</para>
-    /// <para>An episode is asked about twice over. Its own provider IDs are
-    /// usually empty and its keys come from its series, so a second series
-    /// carrying the same IMDb or TMDb ID makes every one of its episodes a
-    /// contender.</para>
+    /// <para>An episode is asked about three ways over, because an episode's own
+    /// provider IDs are usually empty and its user-data identity is built from
+    /// its series plus its season and episode numbers. Its own siblings are
+    /// contenders, since a refresh that renumbers one of them onto this episode's
+    /// slot gives the two the same derived key without either item's provider IDs
+    /// changing at all — nothing about this episode reveals that, and no
+    /// provider-ID query finds it, because there are no provider IDs to query on.
+    /// A second series carrying the same IMDb or TMDb ID then makes every one of
+    /// <i>its</i> episodes a contender too.</para>
     /// </remarks>
     public IReadOnlyList<CurrentItemSnapshot> FindKeyContenders(BaseItem item, CancellationToken cancellationToken)
     {
@@ -200,18 +205,21 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
             contenders[candidate.Id] = candidate;
         }
 
-        if (item is Episode { SeriesId: { } seriesId } && _libraryManager.GetItemById(seriesId) is { } series)
+        if (item is Episode { SeriesId: var seriesId } && !seriesId.Equals(Guid.Empty))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            foreach (var rival in ItemsSharingProviderIds(series.ProviderIds, [seriesId]))
+            // This episode's own siblings, which is the set the run-wide index is
+            // least able to keep current: it is built once, and a renumbering
+            // afterwards needs no library scan, so none of the guards that abandon
+            // the batch fire.
+            AddEpisodes(contenders, seriesId, item.Id);
+
+            if (_libraryManager.GetItemById(seriesId) is { } series)
             {
-                foreach (var candidate in EpisodesOf(rival.Id))
+                foreach (var rival in ItemsSharingProviderIds(series.ProviderIds, [seriesId]))
                 {
-                    if (!candidate.Id.Equals(item.Id))
-                    {
-                        contenders[candidate.Id] = candidate;
-                    }
+                    AddEpisodes(contenders, rival.Id, item.Id);
                 }
             }
         }
@@ -242,6 +250,17 @@ public sealed class LibraryItemCollector(ILibraryManager libraryManager)
             ExcludeItemIds = [.. exclude],
             DtoOptions = ItemFieldsNeeded,
         });
+    }
+
+    private void AddEpisodes(Dictionary<Guid, BaseItem> contenders, Guid seriesId, Guid exclude)
+    {
+        foreach (var candidate in EpisodesOf(seriesId))
+        {
+            if (!candidate.Id.Equals(exclude))
+            {
+                contenders[candidate.Id] = candidate;
+            }
+        }
     }
 
     private IReadOnlyList<BaseItem> EpisodesOf(Guid seriesId) =>
