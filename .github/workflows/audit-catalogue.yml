@@ -1,0 +1,43 @@
+name: Audit the plugin catalogues
+
+# The release workflow proves a *new* asset before advertising it. Nothing was
+# ever looking at the entries already published, which is how 1.0.0.4 sat in
+# manifest.json advertising an MD5 no download had ever hashed to, over an
+# archive built before the tag it was attached to. Every commit's CI was green
+# throughout.
+#
+# Weekly rather than per-push: this fetches every retained archive from the
+# releases API, so it is far too heavy to hang off a pull request, and what it
+# guards against is damage that appears without anybody committing anything —
+# a re-uploaded asset, a deleted release, a retagged commit.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+  # Changing a catalogue by hand is the other way an entry goes wrong, and that
+  # one is worth catching before it merges.
+  pull_request:
+    paths:
+      - 'manifest.json'
+      - 'manifest-jellyfin-12.json'
+      - 'scripts/audit-catalogue.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Full history and tags: the audit compares each archive's embedded source
+    # revision against the commit its release tag points at, which a shallow
+    # clone cannot answer. Without this the check downgrades itself to a note
+    # and the job passes having skipped the interesting half.
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Audit every retained catalogue entry against its download
+      run: ./scripts/audit-catalogue.sh

@@ -1041,6 +1041,27 @@ highest.  The runtime gate is what catches either mistake, loudly and before the
 database is touched.  What the split buys is that following the instructions now
 produces a working install on both lines, which it previously did not on one.
 
+**A catalogue entry is a claim about a file, and claims are audited.**  The
+release workflow verifies each new asset against the checksum it is about to
+publish, which keeps the *next* entry honest and says nothing about the ones
+already there.  1.0.0.4 was published advertising an MD5 no download had ever
+hashed to, over an archive built from a commit before the tag it was attached
+to — 13 files of difference, including the feature its own changelog announced.
+Correcting the checksum would have published that mismatch rather than repaired
+it, so the entry was withdrawn instead: a catalogue may omit a version, and must
+not misdescribe one.
+
+`scripts/audit-catalogue.sh` closes the gap that let it sit there.  For every
+retained entry in both catalogues it fetches the URL the catalogue publishes and
+checks the advertised MD5 against the bytes served, the archive's shape, the
+packaged `meta.json` version and ABI, and the assembly's own embedded source
+revision against the commit its release tag names.  A tag one commit ahead of
+its build is accepted when the only difference is the catalogues themselves,
+which is the shape of every release made before the workflow began pinning
+`--target`.  It runs weekly and on any change to a catalogue, because the damage
+it looks for — a replaced asset, a deleted release, a retagged commit — arrives
+without anybody committing anything.
+
 No schema-name or raw-SQL branches are allowed.  If the EF model changes enough
 to break compilation or the tested projection, publish a new plugin build.
 
