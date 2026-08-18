@@ -760,8 +760,17 @@ anything, and refusing to work without it would trade a real recovery for a
 bookkeeping failure.
 
 Plans and run ledgers are audit artifacts, not a standing identity database.
-Keep a bounded number—the latest five plans and twenty run ledgers—and never
-delete the currently armed plan.
+Keep **the latest plan and the latest run ledger only**—each run replaces them—and
+never delete the currently armed plan.
+
+Retention was originally five plans and twenty ledgers, on the assumption that a
+plan is a small file.  It is not: a plan carries every source row it inspected,
+which on a real library measured 16.5 MB for 9136 detached rows against 31008
+items, so five of them is ~83 MB reached within five days of a nightly trigger.
+Nothing else in Jellyfin keeps rolling backups of its own output in the plugin
+data directory, and this plugin has no claim to be the exception.  The artifacts
+describe the last run; comparing runs over time is an operator's job to do by
+copying a plan out, not a default the plugin imposes on every install.
 
 ---
 
