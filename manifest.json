@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.27",
+        "changelog": "## What's Changed\n\n- chore: keep one plan and one ledger, not five and twenty (#39) (38f5859)\n- chore(release): update the plugin catalogues for version 1.0.0.26 (37496c0)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.26...1.0.0.27\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.27/RestoreUserDataAfterMove_1.0.0.27_jellyfin-10.11.11.zip",
+        "checksum": "bc94588e307f6f28af5d4365c06f5b3a",
+        "timestamp": "2026-08-18T13:16:09Z"
+      },
+      {
         "version": "1.0.0.26",
         "changelog": "## What's Changed\n\n- refactor: take the code-scanning findings that were real, keep the one that was not (8e18753)\n- chore(tests): one NSubstitute across both suites, and a patched SQLite in each (aef852e)\n- chore(release): update the plugin catalogues for version 1.0.0.25 (f1611f5)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.25...1.0.0.26\n",
         "targetAbi": "10.11.11.0",
