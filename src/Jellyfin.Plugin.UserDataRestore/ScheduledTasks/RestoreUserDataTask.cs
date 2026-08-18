@@ -41,13 +41,18 @@ namespace Jellyfin.Plugin.UserDataRestore.ScheduledTasks;
 /// </remarks>
 public class RestoreUserDataTask : IScheduledTask
 {
-    // Plans are small, and five is enough history to compare a bad run against
-    // the last good one. Nobody opening a plugin page has an opinion about it.
-    private const int PlansKept = 5;
+    // One plan, replaced every run. A plan carries every source row it inspected,
+    // so on a real library it is tens of megabytes, not the small file this once
+    // assumed - 16.5 MB against 9136 detached rows and 31008 items. Keeping five
+    // of those made the plugin the only thing in Jellyfin hoarding backups of its
+    // own output. The current plan is what an operator reads; history is not this
+    // plugin's job (DESIGN §8).
+    private const int PlansKept = 1;
 
-    // Ledgers are smaller still - a line per write - and are the thing you go
-    // looking for when a plan is missing, so more of them are kept (DESIGN §8).
-    private const int LedgersKept = 20;
+    // One ledger, on the same rule. It is pruned right after the run opens it, so
+    // the previous run's is gone from the moment this one starts - the artifacts
+    // describe the last run, not a series of them.
+    private const int LedgersKept = 1;
 
     private readonly IDbContextFactory<JellyfinDbContext> _dbFactory;
     private readonly ILibraryManager _libraryManager;

@@ -675,9 +675,9 @@ newest_plan() {
 }
 
 # A run that bails before doing any work writes no plan at all. Counting files
-# cannot detect that -- the plugin keeps only the last five, so once that many
-# exist the count never changes again, and an assertion on it passes whether a
-# plan was written or not. The newest plan's name is the honest signal.
+# cannot detect that -- the plugin keeps only the last plan, so the count is 1
+# from the first run onward whether or not this run wrote anything. The newest
+# plan's name is the honest signal.
 newest_plan_name() {
     local p
     p=$(newest_plan)
