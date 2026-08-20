@@ -1667,3 +1667,35 @@ location is therefore not necessary for reattachment, which is consistent with
 §17.7's inference that the bounding scope is the validating parent — both roots
 of one library are children of the same collection folder.  One observation per
 server line; no instrumented build.
+
+## 18. Operator notes
+
+Moved out of the README, which is for people installing the plugin rather than
+running into its edges.
+
+### 18.1 Upgrading
+
+**From 1.0.0.16 or earlier.**  No libraries ticked used to mean every movie and
+TV library (§6).  It now means none, and the task fails with a message naming the
+settings page until something is ticked.  An install that did tick libraries
+keeps the scope it had.
+
+**From 1.0.0.8 or earlier.**  Those builds shipped a 3am daily trigger.  This one
+ships none, and Jellyfin only persists a task's triggers once they are changed by
+hand, so an install still running the old default loses it on update with nothing
+in the UI to say so.  Measured on 10.11.11 in both directions: an untouched
+default is dropped, a trigger set by hand survives every later update.
+
+### 18.2 Known limits
+
+- It does not prevent future loss.  It cleans up after a move.
+- It cannot reach user data on items Jellyfin has not removed yet.  When a folder
+  drains completely, Jellyfin defers removing the items that lived there; they
+  stay in the library holding their user data, undetached, and so out of scope
+  for this plugin.  They become recoverable once something lands in that folder
+  and the next scan removes the items.  `scripts/parked-userdata.sh` reports
+  whether any exist; it is read-only and safe to run against a live server.
+- It restores the most recent stranded snapshot per title.  Jellyfin does not
+  keep every state an item ever had (§2.2), so this is not a history rebuild.
+- Running it mid-move is harmless but unproductive: the old items still linger
+  beside the new ones, which reports as ambiguous.  The next run catches it.

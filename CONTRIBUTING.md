@@ -31,6 +31,24 @@ The plugin is multi-targeted — `net9.0` for Jellyfin 10.11.11 and `net10.0` fo
 dotnet test
 ```
 
+For coverage, run each suite separately. A whole-solution run with the collector
+attached builds and runs three test hosts in parallel and has been seen to
+exhaust memory on a 14 GB machine:
+
+```bash
+export DOTNET_gcServer=0 DOTNET_GCHeapHardLimit=0x18000000
+for p in Core Database Jellyfin; do
+  dotnet test tests/Jellyfin.Plugin.UserDataRestore.$p.Tests -m:1 \
+    --collect:"XPlat Code Coverage" --results-directory cov \
+    -- RunConfiguration.MaxCpuCount=1 xUnit.MaxParallelThreads=1
+done
+```
+
+Merging the reports needs the `filename` paths normalised first: the suites spell
+the same source file two different ways, and a naive merge double counts every
+file and reports about half the real number. The README badge counts `src/` only,
+not `tools/`.
+
 Matching, classification, and plan generation live in
 `src/Jellyfin.Plugin.UserDataRestore.Core/`, which references no Jellyfin
 assembly, so they can be tested without a server. Keep them there. If a change
