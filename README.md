@@ -58,7 +58,3 @@ Each run writes a plan and a per-write ledger to `<jellyfin-data>/plugins/Jellyf
 ## Documentation
 
 [DESIGN.md](DESIGN.md) covers the specification, safety invariants and measurements, plus [upgrade notes and known limits](DESIGN.md#18-operator-notes). [CONTRIBUTING.md](CONTRIBUTING.md) covers building and linting.
-
-## License
-
-[MIT](LICENSE)
