@@ -33,7 +33,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="10.0.1" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <!-- Kept in step with the adapter project on purpose: tests/Fixtures is
          compiled into both, so a version here that differs from the one there
          means the same source is built against two NSubstitute versions. -->
