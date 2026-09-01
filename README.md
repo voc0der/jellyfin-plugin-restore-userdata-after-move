@@ -38,6 +38,9 @@ https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after
 
 On Jellyfin 12.0 RC5, use [JELLYFIN-12.md](JELLYFIN-12.md) instead.
 
+> [!NOTE]
+> Full repository of this author's plugins: [voc0der/jellyfin-plugins](https://github.com/voc0der/jellyfin-plugins).
+
 ### Manual
 
 1. Download the ZIP for your server from the [releases page](https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases)
