@@ -21,6 +21,13 @@
 
 A Jellyfin plugin that restores watch state lost when media files move. Jellyfin derives an item's ID from its path, so a moved file becomes a new item and the old one's user data is left behind, detached but not deleted. This plugin finds those rows, works out which item each belongs to now, and puts back the played status, play count, resume position, favorite, last played date and rating, per user, for movies and episodes.
 
+<p align="center">
+  <img src="docs/images/restore-userdata-settings.png" alt="Restore User Data After Move plugin configuration screen in Jellyfin" width="880" />
+</p>
+<p align="center">
+  <em>Configuration page inside the Jellyfin dashboard</em>
+</p>
+
 ## Installation
 
 Requires Jellyfin 10.11.11. Add this repository under **Dashboard > Plugins > Repositories**, install **Restore User Data After Move** from the catalog, and restart.
