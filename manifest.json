@@ -8,6 +8,14 @@
     "owner": "voc0der",
     "versions": [
       {
+        "version": "1.0.0.28",
+        "changelog": "## What's Changed\n\n- fix(gap): ask for the metadata refresh instead of relying on the scan (2ec4598)\n- chore: move the Jellyfin 12 build from 12.0.0-rc5 to 12.0.0 (d61f13c)\n- docs: link back to the full plugin repository [skip ci] (9d5a31d)\n- docs(readme): add configuration page screenshot [skip ci] (c578671)\n- docs: add configuration page screenshot [skip ci] (cb8e6eb)\n- chore(ci): notify centralized plugin catalog [skip ci] (bbb911e)\n- chore(test): bump .NET test dependencies (#40, #41) [skip ci] (83de11b)\n- docs(readme): drop the license section [skip ci] (d3d659c)\n- docs(readme): cut it down to install and configure [skip ci] (13f3899)\n- chore(release): update the plugin catalogues for version 1.0.0.27 (3b6ff89)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.27...1.0.0.28\n",
+        "targetAbi": "10.11.11.0",
+        "sourceUrl": "https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/download/1.0.0.28/RestoreUserDataAfterMove_1.0.0.28_jellyfin-10.11.11.zip",
+        "checksum": "3ed9e731cbd0d7ea7f4e72268dbdc73a",
+        "timestamp": "2026-09-08T21:49:24Z"
+      },
+      {
         "version": "1.0.0.27",
         "changelog": "## What's Changed\n\n- chore: keep one plan and one ledger, not five and twenty (#39) (38f5859)\n- chore(release): update the plugin catalogues for version 1.0.0.26 (37496c0)\n\n**Full Changelog**: https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/compare/1.0.0.26...1.0.0.27\n",
         "targetAbi": "10.11.11.0",
