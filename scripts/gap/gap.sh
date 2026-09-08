@@ -578,6 +578,29 @@ scan_library() {
     run_task "$id" "library scan"
 }
 
+# 10.11 picked up an NFO that appeared beside an item it had already scanned: a
+# library scan was enough. 12.0 does not. A scan there identifies what it is
+# seeing for the first time and leaves the metadata of items it already knows
+# alone, so the NFO sits on disk unread and the item stays unidentified. Asking
+# for that item's metadata directly is what the server's own "Refresh metadata"
+# does, it needs no network, and it behaves the same on both lines.
+refresh_item_metadata() {
+    api_ok POST "/Items/$1/Refresh?metadataRefreshMode=FullRefresh&replaceAllMetadata=false" >/dev/null
+}
+
+# The refresh endpoint queues the work and answers immediately, so the provider
+# id lands some time after the call returns. Poll for it rather than sleeping a
+# guess -- the guess is what fails on a slow runner, and it fails as a wrong
+# assertion rather than as a timeout, which is the worse of the two.
+await_provider_id() {
+    local id=$1 provider=$2 want=$3 i
+    for i in $(seq 1 60); do
+        [ "$(item_provider_id "$id" "$provider")" = "$want" ] && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # ---------------------------------------------------------------------------
 # Items and user data
 # ---------------------------------------------------------------------------
@@ -860,6 +883,8 @@ verify_identification_lag() {
     write_movie_nfo "$new_dir" "The Matrix" 1999 603 tt0133093
     scan_library
     unidentified=$(find_movie_by_path "$new_path")
+    refresh_item_metadata "$unidentified"
+    await_provider_id "$unidentified" Imdb tt0133093 || true
     require "identification arrives on a later pass" tt0133093 "$(item_provider_id "$unidentified" Imdb)"
 
     restore "run after identification arrived"

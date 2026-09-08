@@ -1,4 +1,4 @@
-# Jellyfin 12.0 RC5
+# Jellyfin 12.0
 
 The plugin depends on Jellyfin implementation internals, so builds are pinned per
 server version and 12.0 has its own repository URL.
@@ -35,3 +35,34 @@ and has not been re-run against stable 12.0.0. The plugin compiles and its tests
 pass against the stable packages, but that is a narrower claim than the alpha
 run. As a backstop the plugin verifies at runtime that the server's `UserData`
 table still has every column it reads, and refuses if not.
+
+## A scan no longer re-reads an NFO for an item it already knows
+
+Found by the live proof when it was pointed at stable 12.0 rather than RC5.
+
+On 10.11 — and on 12.0 RC5 — writing an NFO next to a file Jellyfin had already
+scanned and then running **Scan Media Library** was enough to identify it: the
+provider IDs from the NFO appeared on the existing item. On stable 12.0 that no
+longer happens. The scan identifies items it is seeing for the first time and
+leaves the metadata of items it already has alone, so the NFO sits on disk
+unread.
+
+Identifying an item scanned fresh *with* its NFO already beside it still works on
+12.0, so this is not NFO support going away. It is specifically the case where
+identification arrives after the item exists.
+
+**Why it matters here.** This plugin deliberately stands down while a moved item
+is unidentified and waits to restore until identification arrives. If your
+identification arrives from an NFO written after the move — an external tagger,
+a metadata tool, a restore from backup — a scheduled library scan alone may no
+longer deliver it on 12.0, and the plugin will keep standing down because it is
+correct to. Refreshing that item's metadata (**Refresh metadata** on the item, or
+`POST /Items/{id}/Refresh`) is what makes the identification land.
+
+Nothing about the plugin's own behaviour changes: it restores once the item is
+identified, whenever that happens. `scripts/gap/gap.sh` now asks for that refresh
+explicitly instead of relying on the scan, which is deterministic on both server
+lines.
+
+Whether this is an intentional change in 12.0's refresh semantics or a
+regression has not been established here, and is worth raising upstream.
