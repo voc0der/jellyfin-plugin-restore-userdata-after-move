@@ -29,7 +29,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 HARNESS = REPO / "scripts" / "gap" / "gap.sh"
 WORKFLOW = pathlib.Path(__file__).with_name("live-gap.yml")
 
-# SERVER_LINES=(10.11.11 12.0-rc5), wherever the harness spells one out. Not
+# SERVER_LINES=(10.11.11 12.0), wherever the harness spells one out. Not
 # anchored to the start of a line: both of them sit behind something else, one
 # in a case arm and one behind a `||`. The word boundary is what keeps
 # SERVER_LINES+=("$1") out — that one appends the argument it was given and says

@@ -130,7 +130,7 @@ jobs:
           echo "| Jellyfin | Plugin repository | Archive, to install by hand instead |"
           echo "|---|---|---|"
           echo "| 10.11.11 | \`${RAW}/manifest.json\` | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip\` |"
-          echo "| 12.0 RC5 | \`${RAW}/manifest-jellyfin-12.json\` | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0-rc5.zip\` |"
+          echo "| 12.0 | \`${RAW}/manifest-jellyfin-12.json\` | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0.zip\` |"
           echo ""
           echo "**Add exactly one.** Jellyfin treats \`targetAbi\` as a minimum rather than a"
           echo "match, so a 12.0 server considers the 10.11 build installable and will offer"
@@ -235,7 +235,7 @@ jobs:
         }
 
         publish manifest.json             jellyfin-10.11.11
-        publish manifest-jellyfin-12.json jellyfin-12.0.0-rc5
+        publish manifest-jellyfin-12.json jellyfin-12.0.0
 
         # A 12.0 server offered a 10.11 archive is the failure this split exists
         # to prevent, so assert the split rather than assume the loop above ran

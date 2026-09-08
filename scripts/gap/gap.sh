@@ -10,7 +10,7 @@
 #
 #   scripts/gap/gap.sh                 both server lines
 #   scripts/gap/gap.sh 10.11.11        one line
-#   scripts/gap/gap.sh --keep 12.0-rc5 keep the scratch tree for inspection
+#   scripts/gap/gap.sh --keep 12.0     keep the scratch tree for inspection
 #
 # Exit status is the result: 0 means every assertion held.
 set -euo pipefail
@@ -35,7 +35,7 @@ SERVER_LINES=()
 
 # framework:package-version:tarball-url-path:default-port
 readonly LINE_10="net9.0|10.11.11|stable/v10.11.11/amd64/jellyfin_10.11.11-amd64.tar.gz|18096"
-readonly LINE_12="net10.0|12.0.0-rc5|preview/v12.0-rc5/amd64/jellyfin_12.0-rc5-amd64.tar.gz|18098"
+readonly LINE_12="net10.0|12.0.0|stable/v12.0/amd64/jellyfin_12.0-amd64.tar.gz|18098"
 
 # The libraries this harness creates, filled in once the server has assigned
 # them IDs. Everything the plugin is asked to do is scoped to these two.
@@ -53,14 +53,14 @@ while [ $# -gt 0 ]; do
         --scratch) SCRATCH_ROOT="$2"; shift ;;
         --port) PORT_BASE="$2"; shift ;;
         --cache) CACHE="$2"; shift ;;
-        10.11.11|12.0-rc5) SERVER_LINES+=("$1") ;;
-        both) SERVER_LINES=(10.11.11 12.0-rc5) ;;
+        10.11.11|12.0) SERVER_LINES+=("$1") ;;
+        both) SERVER_LINES=(10.11.11 12.0) ;;
         -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
     shift
 done
-[ ${#SERVER_LINES[@]} -gt 0 ] || SERVER_LINES=(10.11.11 12.0-rc5)
+[ ${#SERVER_LINES[@]} -gt 0 ] || SERVER_LINES=(10.11.11 12.0)
 
 # ---------------------------------------------------------------------------
 # Output
@@ -150,7 +150,7 @@ done
 # HTTP
 # ---------------------------------------------------------------------------
 
-# Jellyfin 12.0 RC5 rejects X-Emby-Token and ?api_key=, so everything goes
+# Jellyfin 12.0 rejects X-Emby-Token and ?api_key=, so everything goes
 # through the Authorization header, which both lines accept.
 auth_header() {
     if [ -n "${TOKEN:-}" ]; then
@@ -1137,7 +1137,7 @@ run_line() {
     local spec
     case "$LINE" in
         10.11.11) spec=$LINE_10 ;;
-        12.0-rc5) spec=$LINE_12 ;;
+        12.0) spec=$LINE_12 ;;
         # An unmatched arm used to leave $spec unset and let `set -u` abort on
         # the read below with a message about a variable nobody had heard of.
         # Say what actually went wrong instead.

@@ -15,7 +15,7 @@ claims for a write is true of the database. This script finds out.
 ```sh
 scripts/gap/gap.sh                    # both server lines
 scripts/gap/gap.sh 10.11.11           # one
-scripts/gap/gap.sh --keep 12.0-rc5    # keep the scratch tree afterwards
+scripts/gap/gap.sh --keep 12.0        # keep the scratch tree afterwards
 ```
 
 Exit status is the result. Zero means every assertion held.

@@ -1426,8 +1426,8 @@ contains only its own assembly plus `meta.json`; host packages are referenced
 with `ExcludeAssets=runtime`.
 
 **Packages.** `Jellyfin.Controller` and `Jellyfin.Database.Implementations` are
-both published on nuget.org at `10.11.11` and `12.0.0-rc5`.  Builds target
-`net9.0` for 10.11.11 and `net10.0` for 12.0 RC5.  The plugin source was
+both published on nuget.org at `10.11.11` and `12.0.0`.  Builds target
+`net9.0` for 10.11.11 and `net10.0` for 12.0.  The plugin source was
 byte-identical across the two builds; only `TargetFramework` and package version
 differed.
 
