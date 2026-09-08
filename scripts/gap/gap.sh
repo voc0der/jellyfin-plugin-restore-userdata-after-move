@@ -10,7 +10,7 @@
 #
 #   scripts/gap/gap.sh                 both server lines
 #   scripts/gap/gap.sh 10.11.11        one line
-#   scripts/gap/gap.sh --keep 12.0-rc5 keep the scratch tree for inspection
+#   scripts/gap/gap.sh --keep 12.0     keep the scratch tree for inspection
 #
 # Exit status is the result: 0 means every assertion held.
 set -euo pipefail
@@ -35,7 +35,7 @@ SERVER_LINES=()
 
 # framework:package-version:tarball-url-path:default-port
 readonly LINE_10="net9.0|10.11.11|stable/v10.11.11/amd64/jellyfin_10.11.11-amd64.tar.gz|18096"
-readonly LINE_12="net10.0|12.0.0-rc5|preview/v12.0-rc5/amd64/jellyfin_12.0-rc5-amd64.tar.gz|18098"
+readonly LINE_12="net10.0|12.0.0|stable/v12.0/amd64/jellyfin_12.0-amd64.tar.gz|18098"
 
 # The libraries this harness creates, filled in once the server has assigned
 # them IDs. Everything the plugin is asked to do is scoped to these two.
@@ -53,14 +53,14 @@ while [ $# -gt 0 ]; do
         --scratch) SCRATCH_ROOT="$2"; shift ;;
         --port) PORT_BASE="$2"; shift ;;
         --cache) CACHE="$2"; shift ;;
-        10.11.11|12.0-rc5) SERVER_LINES+=("$1") ;;
-        both) SERVER_LINES=(10.11.11 12.0-rc5) ;;
+        10.11.11|12.0) SERVER_LINES+=("$1") ;;
+        both) SERVER_LINES=(10.11.11 12.0) ;;
         -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
     shift
 done
-[ ${#SERVER_LINES[@]} -gt 0 ] || SERVER_LINES=(10.11.11 12.0-rc5)
+[ ${#SERVER_LINES[@]} -gt 0 ] || SERVER_LINES=(10.11.11 12.0)
 
 # ---------------------------------------------------------------------------
 # Output
@@ -150,7 +150,7 @@ done
 # HTTP
 # ---------------------------------------------------------------------------
 
-# Jellyfin 12.0 RC5 rejects X-Emby-Token and ?api_key=, so everything goes
+# Jellyfin 12.0 rejects X-Emby-Token and ?api_key=, so everything goes
 # through the Authorization header, which both lines accept.
 auth_header() {
     if [ -n "${TOKEN:-}" ]; then
@@ -578,6 +578,29 @@ scan_library() {
     run_task "$id" "library scan"
 }
 
+# 10.11 picked up an NFO that appeared beside an item it had already scanned: a
+# library scan was enough. 12.0 does not. A scan there identifies what it is
+# seeing for the first time and leaves the metadata of items it already knows
+# alone, so the NFO sits on disk unread and the item stays unidentified. Asking
+# for that item's metadata directly is what the server's own "Refresh metadata"
+# does, it needs no network, and it behaves the same on both lines.
+refresh_item_metadata() {
+    api_ok POST "/Items/$1/Refresh?metadataRefreshMode=FullRefresh&replaceAllMetadata=false" >/dev/null
+}
+
+# The refresh endpoint queues the work and answers immediately, so the provider
+# id lands some time after the call returns. Poll for it rather than sleeping a
+# guess -- the guess is what fails on a slow runner, and it fails as a wrong
+# assertion rather than as a timeout, which is the worse of the two.
+await_provider_id() {
+    local id=$1 provider=$2 want=$3 i
+    for i in $(seq 1 60); do
+        [ "$(item_provider_id "$id" "$provider")" = "$want" ] && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # ---------------------------------------------------------------------------
 # Items and user data
 # ---------------------------------------------------------------------------
@@ -860,6 +883,8 @@ verify_identification_lag() {
     write_movie_nfo "$new_dir" "The Matrix" 1999 603 tt0133093
     scan_library
     unidentified=$(find_movie_by_path "$new_path")
+    refresh_item_metadata "$unidentified"
+    await_provider_id "$unidentified" Imdb tt0133093 || true
     require "identification arrives on a later pass" tt0133093 "$(item_provider_id "$unidentified" Imdb)"
 
     restore "run after identification arrived"
@@ -1137,7 +1162,7 @@ run_line() {
     local spec
     case "$LINE" in
         10.11.11) spec=$LINE_10 ;;
-        12.0-rc5) spec=$LINE_12 ;;
+        12.0) spec=$LINE_12 ;;
         # An unmatched arm used to leave $spec unset and let `set -u` abort on
         # the read below with a message about a variable nobody had heard of.
         # Say what actually went wrong instead.

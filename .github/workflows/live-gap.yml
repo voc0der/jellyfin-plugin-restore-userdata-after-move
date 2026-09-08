@@ -78,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        line: [ '10.11.11', '12.0-rc5' ]
+        line: [ '10.11.11', '12.0' ]
 
     # Both lines and the build take 16m35s on a developer machine, and a job here
     # runs one of them. The rest is headroom for a slower runner and a cold

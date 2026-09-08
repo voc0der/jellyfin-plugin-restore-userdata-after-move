@@ -16,12 +16,13 @@ OUT="artifacts"
 # framework:package-version:manifest-abi
 #
 # The archive is named for the package it was built against, not the version the
-# server reports. A build made against 12.0.0-rc5 must not be handed out as
-# "12.0.0": RC5 and stable both report 12.0.0 and nothing in the assemblies tells
-# them apart, so the file name is the only place the distinction survives.
+# server reports. That mattered most under RC5, which reported itself as 12.0.0
+# exactly like stable does, with nothing in the assemblies to tell them apart --
+# the file name was the only place the distinction survived. Now that the 12
+# build is against stable the two agree, and the convention still holds.
 TARGETS=(
     "net9.0:10.11.11:10.11.11.0"
-    "net10.0:12.0.0-rc5:12.0.0.0"
+    "net10.0:12.0.0:12.0.0.0"
 )
 
 rm -rf "$OUT"

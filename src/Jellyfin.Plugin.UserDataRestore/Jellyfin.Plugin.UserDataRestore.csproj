@@ -21,9 +21,10 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <JellyfinPackageVersion>12.0.0-rc5</JellyfinPackageVersion>
-    <!-- 12.0 RC5 reports itself as 12.0.0; the prerelease tag is not part of
-         IApplicationHost.ApplicationVersion. Verified in evidence/results. -->
+    <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
+    <!-- Package and runtime version now agree. They did not under RC5, which
+         also reported itself as 12.0.0 with no prerelease tag in
+         IApplicationHost.ApplicationVersion (see evidence/results). -->
     <JellyfinRuntimeVersion>12.0.0</JellyfinRuntimeVersion>
     <JellyfinTargetAbi>12.0.0.0</JellyfinTargetAbi>
   </PropertyGroup>

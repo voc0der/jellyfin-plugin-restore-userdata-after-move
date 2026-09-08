@@ -27,7 +27,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <JellyfinPackageVersion>12.0.0-rc5</JellyfinPackageVersion>
+    <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
     <EntityFrameworkVersion>10.0.10</EntityFrameworkVersion>
   </PropertyGroup>
 
