@@ -36,7 +36,7 @@ Requires Jellyfin 10.11.11. Add this repository under **Dashboard > Plugins > Re
 https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/manifest.json
 ```
 
-On Jellyfin 12.0 RC5, use [JELLYFIN-12.md](JELLYFIN-12.md) instead.
+On Jellyfin 12.0, use [JELLYFIN-12.md](JELLYFIN-12.md) instead.
 
 > [!NOTE]
 > Full repository of this author's plugins: [voc0der/jellyfin-plugins](https://github.com/voc0der/jellyfin-plugins).
