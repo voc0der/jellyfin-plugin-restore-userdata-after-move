@@ -23,7 +23,7 @@
        version of the provider would be verifying the wrong thing. -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <JellyfinPackageVersion>10.11.11</JellyfinPackageVersion>
-    <EntityFrameworkVersion>9.0.11</EntityFrameworkVersion>
+    <EntityFrameworkVersion>9.0.20</EntityFrameworkVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
