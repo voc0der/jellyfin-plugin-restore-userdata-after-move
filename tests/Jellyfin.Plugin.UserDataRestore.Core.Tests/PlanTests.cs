@@ -454,11 +454,11 @@ public class PlanTests
         return PlanBuilder.Build(result, new PlanContext
         {
             PluginVersion = "1.0.0.0",
-            TargetJellyfinVersion = "10.11.11",
-            JellyfinPackageVersion = "10.11.11",
-            TargetAbi = "10.11.11.0",
+            TargetJellyfinVersion = "12.0.0",
+            JellyfinPackageVersion = "12.0.0",
+            TargetAbi = "12.0.0.0",
             ServerId = "test-server",
-            ServerVersion = "10.11.11",
+            ServerVersion = "12.0.0",
             CreatedUtc = created ?? new DateTimeOffset(2026, 8, 12, 15, 0, 0, TimeSpan.Zero),
             Options = options,
             FingerprintBefore = new UserDataFingerprint(10, "abc"),

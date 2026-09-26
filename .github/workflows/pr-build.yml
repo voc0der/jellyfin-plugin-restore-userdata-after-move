@@ -39,9 +39,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: |
-          9.0.x
-          10.0.x
+        dotnet-version: 10.0.x
 
     - name: Set build metadata
       shell: bash
@@ -50,9 +48,9 @@ jobs:
         echo "PR_NUMBER=${PR_NUMBER}" >> "$GITHUB_ENV"
         echo "BUILD_VERSION=0.0.0.${PR_NUMBER}" >> "$GITHUB_ENV"
 
-    # build.sh runs the tests, builds both server lines, and refuses to package if
-    # a host assembly leaked in or meta.json disagrees with the target.
-    - name: Build and package both server lines
+    # build.sh runs the tests, builds the plugin, and refuses to package if a
+    # host assembly leaked in or meta.json disagrees with the target.
+    - name: Build and package
       shell: bash
       run: VERSION="${BUILD_VERSION}" ./build.sh
 
@@ -73,8 +71,7 @@ jobs:
           echo "- Build version: \`${BUILD_VERSION}\`"
           echo ""
           echo "These are develop builds, versioned \`0.0.0.<pr>\` so they can never"
-          echo "outrank a release in the plugin catalogue. Install the archive matching"
-          echo "your exact server version."
+          echo "outrank a release in the plugin catalogue. They require Jellyfin 12.0.0."
           echo ""
           for zip in artifacts/*.zip; do
             echo "- \`$(basename "${zip}")\`"

@@ -7,7 +7,8 @@
 > did not happen in that form.  See the status block at the top of
 > [DESIGN.md](DESIGN.md) for what actually exists, and
 > [`scripts/gap/`](scripts/gap/) for the harness that validates it end to end
-> against real 10.11.11 and 12.0-RC5 servers.
+> against a real Jellyfin 12.0 server.  Jellyfin 10.11.11, one of the two lines
+> planned for below, is no longer supported after 1.0.0.28.
 >
 > The decision table in §7 is still current except for the row noted there.
 
@@ -273,12 +274,9 @@ passes.
   instrumented build has been run.
 - **Providers other than SQLite.** Untested. Decide whether to claim support
   before writing provider-agnostic code for a case nobody runs.
-- **Catalogue listing for 12.0.** Only the 10.11.11 build is published to the
-  plugin catalogue; the 12.0 archive ships on the GitHub release for manual
-  install. Listing both under one version would let a 12.0 server install the
-  10.11 build, because `targetAbi` is a minimum. Revisit when 12.0 is stable and
-  validated — either as a second version stream whose ordering resolves correctly,
-  or a second manifest.
+- ~~**Catalogue listing for 12.0.**~~ **Resolved:** 12.0 got a second manifest,
+  and after 1.0.0.28 it is the only line built. DESIGN.md §11 has the current
+  arrangement.
 - **Upstream.** The findings in §17.6 and §17.7 describe behaviour worth
   reporting to Jellyfin independently of this plugin. A fix upstream would reduce
   the population this tool serves, which is a good outcome.

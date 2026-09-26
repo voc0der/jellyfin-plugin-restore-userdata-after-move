@@ -38,9 +38,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: |
-          9.0.x
-          10.0.x
+        dotnet-version: 10.0.x
 
     - name: Restore dependencies
       run: dotnet restore
@@ -86,10 +84,10 @@ jobs:
 
         cat CHANGELOG.md
 
-    # build.sh runs the tests, builds both server lines, and refuses to package if
-    # a host assembly leaked into an archive or meta.json disagrees with the
+    # build.sh runs the tests, builds the plugin, and refuses to package if a
+    # host assembly leaked into the archive or meta.json disagrees with the
     # target version or ABI.
-    - name: Build and package both server lines
+    - name: Build and package
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: VERSION="${{ steps.version.outputs.version }}" ./build.sh
 
@@ -100,8 +98,8 @@ jobs:
         path: artifacts/*.zip
         if-no-files-found: ignore
 
-    # The release is created before manifest.json is touched, and that ordering is
-    # load-bearing. The manifest *is* the plugin catalogue — it is served straight
+    # The release is created before either catalogue is touched, and that ordering
+    # is load-bearing. The manifest *is* the plugin catalogue — it is served straight
     # off main — so a manifest commit that lands before a failed `gh release create`
     # advertises a version whose download URL 404s and whose checksum matches
     # nothing. That is not hypothetical: on run 31747724320 the release failed on an
@@ -117,26 +115,14 @@ jobs:
         REPO="${{ github.repository }}"
         RAW="https://raw.githubusercontent.com/${REPO}/main"
 
-        # Both server lines have a catalogue of their own. Saying otherwise here
-        # would send 12.0 operators to a manual install and out of the update
-        # path the per-line manifests exist to give them.
         {
           cat CHANGELOG.md
           echo ""
-          echo "## Which build do I want?"
+          echo "## Installing"
           echo ""
-          echo "Add the repository matching your server under Dashboard → Plugins → Repositories:"
-          echo ""
-          echo "| Jellyfin | Plugin repository | Archive, to install by hand instead |"
-          echo "|---|---|---|"
-          echo "| 10.11.11 | \`${RAW}/manifest.json\` | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-10.11.11.zip\` |"
-          echo "| 12.0 | \`${RAW}/manifest-jellyfin-12.json\` | \`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0.zip\` |"
-          echo ""
-          echo "**Add exactly one.** Jellyfin treats \`targetAbi\` as a minimum rather than a"
-          echo "match, so a 12.0 server considers the 10.11 build installable and will offer"
-          echo "it; adding both repositories merges them by plugin ID. Builds are pinned per"
-          echo "server version and the plugin refuses to run on the wrong one, so a mistake"
-          echo "is loud rather than silent — but it is still a mistake worth avoiding."
+          echo "Requires Jellyfin 12.0.0. Add \`${RAW}/manifest-jellyfin-12.json\` under"
+          echo "Dashboard → Plugins → Repositories, or install"
+          echo "\`RestoreUserDataAfterMove_${VERSION}_jellyfin-12.0.0.zip\` by hand."
         } > RELEASE_NOTES.md
 
         # --target pins the tag to the commit these artifacts were built from.
@@ -174,14 +160,14 @@ jobs:
           echo "verified ${name}"
         done
 
-    # One catalogue per server line, and the split is forced rather than tidy.
-    # Jellyfin's targetAbi is a *minimum* (DESIGN §17.3), so an entry built for
-    # 10.11.11 is considered installable by a 12.0 server. Publishing only the
-    # 10.11 archive therefore does not hide it from 12.0 — it makes the wrong
-    # build the only offer a 12.0 server gets, and that build loads and is then
-    # refused by the plugin's own version gate. Nothing expressible in one
-    # manifest fixes that, so a 12.0 server is pointed at a catalogue whose
-    # entries are the 12.0 builds; see README.md.
+    # Two catalogues, one build. manifest-jellyfin-12.json is the one README.md
+    # points at and the one the centralized repository reads. manifest.json was
+    # the 10.11.11 catalogue until 1.0.0.28 and still carries those entries.
+    # Jellyfin's targetAbi is a *minimum* (DESIGN §17.3), so a 10.11 server
+    # ignores the 12.0 entries added here and keeps offering its last build,
+    # while a server upgraded to 12.0 that still points at manifest.json is
+    # offered the 12.0 build as the newest version instead of being left on a
+    # 10.11 build the version gate refuses.
     - name: Update the plugin catalogues
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
@@ -191,7 +177,7 @@ jobs:
 
         # Copied, not duplicated. Two catalogues describing the same plugin GUID
         # differently is a bug waiting for somebody to edit one of them.
-        SHARED=$(jq -c '.[0] | {guid, name, overview, description, category, owner}' manifest.json)
+        SHARED=$(jq -c '.[0] | {guid, name, overview, description, category, owner}' manifest-jellyfin-12.json)
 
         publish() {
           manifest="$1"
@@ -234,13 +220,13 @@ jobs:
           fi
         }
 
-        publish manifest.json             jellyfin-10.11.11
         publish manifest-jellyfin-12.json jellyfin-12.0.0
+        publish manifest.json             jellyfin-12.0.0
 
-        # A 12.0 server offered a 10.11 archive is the failure this split exists
-        # to prevent, so assert the split rather than assume the loop above ran
-        # the way it reads.
-        for pair in "manifest.json:10.11.11.0" "manifest-jellyfin-12.json:12.0.0.0"; do
+        # A 12.0 server offered a 10.11 archive as the newest version is the
+        # failure to prevent, so assert what each catalogue now leads with
+        # rather than assume the calls above ran the way they read.
+        for pair in "manifest-jellyfin-12.json:12.0.0.0" "manifest.json:12.0.0.0"; do
           file="${pair%%:*}"
           want="${pair##*:}"
           got=$(jq -r '.[0].versions[0].targetAbi' "$file")
