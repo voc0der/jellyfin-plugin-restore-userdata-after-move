@@ -23,8 +23,8 @@
        normally: without the runtime assets there is no BaseItem to construct
        and nothing to test against. -->
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
-    <PackageReference Include="Jellyfin.Database.Implementations" Version="12.0.0" />
+    <PackageReference Include="Jellyfin.Controller" Version="12.1.0" />
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="12.1.0" />
 
     <!-- The write path talks to the database as well as to the managers, so the
          faults worth injecting into it are database faults. Kept in step with the
