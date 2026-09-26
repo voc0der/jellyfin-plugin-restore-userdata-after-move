@@ -29,8 +29,8 @@ what the table did rather than asserting the run changed nothing.
 
 See [§17](#17-empirical-results) for method and results, [`evidence/`](evidence/)
 for probe source, logs, and row dumps, and [`scripts/gap/`](scripts/gap/) for the
-end-to-end harness that stands up throwaway 10.11.11 and 12.0-RC5 servers and
-asserts the behaviour above against real ones.
+end-to-end harness that stands up a throwaway Jellyfin 12.0 server and asserts
+the behaviour above against a real one.
 **Scope:** One-shot recovery of user state that Jellyfin detached after path-based
 item identity changed.  This is recovery only.  Preventing *future* loss is a
 separate problem, addressed by the stable-path design in the Coldarr repository
@@ -1033,12 +1033,15 @@ invites the reader to assume the fourth is still coming.
 
 ## 11. Versioning and packaging
 
-Produce separate build artifacts for each supported Jellyfin ABI:
+Produce one build artifact, for the supported Jellyfin ABI:
 
-| Initial target | Framework | Dependency policy |
+| Target | Framework | Dependency policy |
 |---|---|---|
-| 10.11.11 | .NET 9 | Pin Jellyfin packages to 10.11.11; runtime task initially permits 10.11.11 only |
-| 12.0 RC5 | .NET 10 | Pin packages to RC5; replace with the stable 12.0 build after validation |
+| 12.0.0 | .NET 10 | Pin Jellyfin packages to 12.0.0; runtime task permits 12.0.0 only |
+
+Jellyfin 10.11.11 had a build of its own, on .NET 9, through 1.0.0.28, and is
+not supported after it.  12.0 was first built against RC5 and has been built
+against the stable 12.0.0 packages since.
 
 Use the official
 [`jellyfin-plugin-template`](https://github.com/jellyfin/jellyfin-plugin-template)
@@ -1068,22 +1071,25 @@ prerelease will also load and run on any other server reporting that version, so
 The model check is a compatibility check, not an authenticity one.  It cannot
 distinguish two builds that share a model, and does not claim to.
 
-**One catalogue per server line.**  Because `targetAbi` is a minimum
-([§17.3](#173-plugin-abi-enforcement)), a catalogue entry built for 10.11.11 is
-considered installable by a 12.0 server.  Omitting the 12.0 build from that
-catalogue therefore does not hide the 10.11 build from 12.0 — it only makes the
-wrong build the *only* offer a 12.0 server receives, which then installs, loads,
-and is refused by the runtime version gate.  A manifest cannot express an upper
-bound, so the split has to be at the level above it: `manifest.json` carries the
-10.11.11 builds and `manifest-jellyfin-12.json` the 12.0 ones, and each server
-line is pointed at its own URL.
+The recorded analyzer alpha ([`evidence/alpha/`](evidence/alpha/)) ran on RC5 on
+2026-08-12 and has not been re-run on stable 12.0.0.  What covers the stable
+build is the live proof in §12.3, which runs against the stable 12.0 server on
+every push.
 
-The residual is worth stating rather than implying away.  Nothing stops a 12.0
-operator from adding the 10.11 URL, and both catalogues carry the same plugin
-GUID, so adding both merges them and Jellyfin offers whichever version number is
-highest.  The runtime gate is what catches either mistake, loudly and before the
-database is touched.  What the split buys is that following the instructions now
-produces a working install on both lines, which it previously did not on one.
+**Two catalogues, one build.**  `manifest-jellyfin-12.json` is the catalogue the
+README points at and the one the centralized plugin repository reads.
+`manifest.json` was the 10.11.11 catalogue until 1.0.0.28 and keeps those
+entries; every release since is added to both.  Because `targetAbi` is a minimum
+([§17.3](#173-plugin-abi-enforcement)), a 10.11 server ignores the 12.0 entries
+and keeps offering 1.0.0.28, while a server upgraded to 12.0 that still points
+at `manifest.json` is offered the 12.0 build as the newest version rather than
+being left on a 10.11 build the runtime gate refuses.
+
+The residual is worth stating rather than implying away.  A 12.0 server pointed
+at `manifest.json` still lists the old 10.11 builds, and an operator who picks
+one by hand gets a build that loads and is then refused by the runtime gate,
+loudly and before the database is touched.  `manifest-jellyfin-12.json` lists
+only 12.0 builds, which is why it is the one the README gives.
 
 **A catalogue entry is a claim about a file, and claims are audited.**  The
 release workflow verifies each new asset against the checksum it is about to
@@ -1212,12 +1218,12 @@ the SQLite provider and any other provider Coldarr intends to claim support for.
 - Plan and ledger files publish atomically.
 
 What exists runs the reader's queries against the host's own `JellyfinDbContext`
-and entity model over a throwaway SQLite database, once per supported server's
-provider — Entity Framework 9.0.11 for 10.11.11, 10.0.10 for 12.0.  Both, because
-a query one provider translates is not automatically one the other translates,
-and an untranslatable expression is a runtime failure: nothing the compiler can
-see, nothing a core test can see, and on a server it surfaces part-way through a
-restore as a run that stopped.
+and entity model over a throwaway SQLite database, on the Entity Framework
+provider the server ships.  An untranslatable expression is a runtime failure:
+nothing the compiler can see, nothing a core test can see, and on a server it
+surfaces part-way through a restore as a run that stopped.  While 10.11.11 was
+supported this ran once per server's provider, since a query one translates is
+not automatically one the other does.
 
 It stops one layer short of a server, and not by preference.
 `IJellyfinDatabaseProvider` is substituted because Jellyfin publishes
@@ -1230,7 +1236,7 @@ optional and does not run only when somebody remembers it.
 
 ### 12.3 Disposable-server integration suite
 
-Run the same black-box scenario on Jellyfin 10.11.11 and 12.0 RC5/stable:
+Run the same black-box scenario on Jellyfin 12.0:
 
 1. Start a clean server with tiny generated movie and episode media plus local
    NFO provider IDs.
@@ -1286,11 +1292,12 @@ push to `main` runs it.
 
 Two details of that arrangement are deliberate:
 
-- **One job per server line, not one run covering both.**  A single process stops
-  at the first failed assertion, so a break in 10.11.11 would leave 12.0
-  unexercised and the report would say nothing about the half that might be
-  fine.  Split, both always run, and both are still finished in the time of the
-  slower one.
+- **One job per server line, not one run covering all of them.**  A single
+  process stops at the first failed assertion, so a break in one line would
+  leave the next unexercised and the report would say nothing about the part
+  that might be fine.  Split, all always run, and they finish in the time of the
+  slowest one.  There is one line today, 12.0; the matrix stays so that adding
+  the next release is a one-word change.
 - **No concurrency group.**  A group's *pending* slot is where runs get dropped —
   the hazard the release workflow carries `check-release-concurrency.py` to keep
   out.  These jobs share nothing, each getting its own machine, port and
@@ -1675,6 +1682,13 @@ running into its edges.
 
 ### 18.1 Upgrading
 
+**From Jellyfin 10.11.11.**  1.0.0.28 is the last build for 10.11.11.  A 10.11
+server keeps running it, and `manifest.json` keeps offering it and nothing newer
+(§11).  After upgrading the server to 12.0, update the plugin from the catalogue:
+the 10.11 build loads on 12.0 and the runtime gate refuses to run it.  Either
+repository URL delivers the 12.0 build; `manifest-jellyfin-12.json` is the one to
+use for a new install.
+
 **From 1.0.0.16 or earlier.**  No libraries ticked used to mean every movie and
 TV library (§6).  It now means none, and the task fails with a message naming the
 settings page until something is ticked.  An install that did tick libraries
@@ -1699,3 +1713,14 @@ default is dropped, a trigger set by hand survives every later update.
   keep every state an item ever had (§2.2), so this is not a history rebuild.
 - Running it mid-move is harmless but unproductive: the old items still linger
   beside the new ones, which reports as ambiguous.  The next run catches it.
+- On 12.0 a library scan does not read an NFO that appears beside an item it has
+  already scanned; it identifies items it sees for the first time and leaves the
+  metadata of items it already has alone.  When identification arrives that way
+  after a move (an external tagger, a metadata tool, a restore from backup), the
+  item stays unidentified and this plugin correctly keeps standing down until
+  the item's metadata is refreshed: **Refresh metadata** on the item, or
+  `POST /Items/{id}/Refresh`.  An item scanned fresh with its NFO already beside
+  it is identified as before.  10.11 and 12.0 RC5 both read the late NFO on a
+  plain scan, and whether stable 12.0's behaviour is intended upstream has not
+  been established.  Found by the live proof, which now asks for the refresh
+  explicitly.

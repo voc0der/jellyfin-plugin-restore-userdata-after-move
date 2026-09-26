@@ -13,14 +13,10 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    # The plugin multi-targets net9.0 (Jellyfin 10.11.11) and net10.0 (12.0), so
-    # both SDKs are needed to restore and build the whole solution.
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: |
-          9.0.x
-          10.0.x
+        dotnet-version: 10.0.x
 
     - name: Restore dependencies
       run: dotnet restore
@@ -40,10 +36,10 @@ jobs:
     - name: Run the Jellyfin adapter tests
       run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests/ --verbosity minimal
 
-    # Multi-targeted on purpose: 10.11.11 is Entity Framework 9.0.11 and 12.0 RC5
-    # is 10.0.10, and a query one translates is not automatically one the other
-    # does. Running a single framework here would leave half the matrix untested.
-    - name: Run the database tests against both provider stacks
+    # The reader's queries against the host's own JellyfinDbContext and the
+    # Entity Framework provider the server ships, since an untranslatable query
+    # is a runtime failure nothing else here would see.
+    - name: Run the database tests
       run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Database.Tests/ --verbosity minimal
 
     # The release workflow's one-release-per-commit invariant is three settings

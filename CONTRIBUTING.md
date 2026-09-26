@@ -15,15 +15,15 @@ Issues and pull requests are welcome!
 ./build.sh
 ```
 
-That runs the tests and writes one archive per supported Jellyfin version to
-`artifacts/`. For a plain compile:
+That runs the tests and writes the plugin archive to `artifacts/`. For a plain
+compile:
 
 ```bash
 dotnet build --configuration Release
 ```
 
-The plugin is multi-targeted — `net9.0` for Jellyfin 10.11.11 and `net10.0` for
-12.0 — from a single source tree, so both ABIs are compiled on every build.
+The plugin targets `net10.0` and Jellyfin 12.0.0. The adapter tests reference
+Jellyfin.Controller, which needs the ASP.NET Core 10 runtime installed to run.
 
 ## Testing
 
@@ -58,16 +58,15 @@ the core with the host type mapped at the boundary.
 Above that sit two suites the boundary makes necessary: one that builds real
 `Movie`, `Episode` and `Series` entities to check what the adapter asks the
 server for, and one that runs the database reads against the host's own
-`JellyfinDbContext` on both servers' Entity Framework providers, since a query
-one translates is not automatically one the other does.
+`JellyfinDbContext` on the Entity Framework provider the server ships, since an
+untranslatable query is a runtime failure nothing else would catch.
 
 Past all of them is [`scripts/gap/gap.sh`](scripts/gap/gap.sh), which stands up a
 throwaway Jellyfin, strands user data by moving files, and proves the restore on
 a real server:
 
 ```bash
-scripts/gap/gap.sh                 # both server lines, around 17 minutes
-scripts/gap/gap.sh 10.11.11        # one, and about half that
+scripts/gap/gap.sh                 # around 10 minutes
 ```
 
 You do not have to run it — CI runs it on every push and on any pull request

@@ -2,15 +2,16 @@
 """Assert that CI's live proof still covers every server line the harness has.
 
 `scripts/gap/gap.sh` with no arguments runs every supported line. CI runs one
-job per line instead, so that a failure on 10.11.11 does not leave 12.0
-untested — which means the list of lines now lives in two files, and nothing
-about the second one is checked by running the first.
+job per line instead, so that a failure on one line does not leave the others
+untested — which means the list of lines lives in two files, and nothing about
+the second one is checked by running the first.
 
 The failure that follows is quiet in the way that matters. Add a line to the
-harness — 12.0 stable, when it arrives — and forget the matrix, and every
-workflow stays green, the summary still says the live proof passed, and the new
-server is simply never started. Nobody is told a line is missing, because from
-CI's point of view nothing is: the jobs it knows about all succeeded.
+harness — the next Jellyfin release, when it arrives — and forget the matrix,
+and every workflow stays green, the summary still says the live proof passed,
+and the new server is simply never started. Nobody is told a line is missing,
+because from CI's point of view nothing is: the jobs it knows about all
+succeeded.
 
 Also checked here, though it fails loudly rather than quietly: the workflow
 derives each server's tarball name out of gap.sh to key its cache, and a line
@@ -29,12 +30,13 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 HARNESS = REPO / "scripts" / "gap" / "gap.sh"
 WORKFLOW = pathlib.Path(__file__).with_name("live-gap.yml")
 
-# SERVER_LINES=(10.11.11 12.0), wherever the harness spells one out. Not
-# anchored to the start of a line: both of them sit behind something else, one
-# in a case arm and one behind a `||`. The word boundary is what keeps
-# SERVER_LINES+=("$1") out — that one appends the argument it was given and says
-# nothing about which lines exist. The empty declaration is skipped for the same
-# reason: it introduces the variable rather than describing the servers.
+# SERVER_LINES=(12.0), wherever the harness spells one out. Not anchored to
+# the start of a line: the default sits behind a `||`, and a case arm that
+# selects several lines at once would sit behind a pattern. The word boundary
+# is what keeps SERVER_LINES+=("$1") out — that one appends the argument it was
+# given and says nothing about which lines exist. The empty declaration is
+# skipped for the same reason: it introduces the variable rather than
+# describing the servers.
 ASSIGNMENT = re.compile(r"\bSERVER_LINES=\(([^)]*)\)")
 
 
@@ -46,9 +48,10 @@ def main() -> int:
     if not listed:
         return fail(HARNESS, "gap.sh lists no server lines at all; has SERVER_LINES been renamed?")
 
-    # `both` and the bare-invocation default are two separate literals in the
-    # harness. If they have drifted apart there is no single answer to compare
-    # the matrix against, and one of the two is already wrong.
+    # A case arm that selects several lines and the bare-invocation default
+    # would be separate literals in the harness. If they have drifted apart
+    # there is no single answer to compare the matrix against, and one of the
+    # two is already wrong.
     if len(set(listed)) != 1:
         return fail(
             HARNESS,

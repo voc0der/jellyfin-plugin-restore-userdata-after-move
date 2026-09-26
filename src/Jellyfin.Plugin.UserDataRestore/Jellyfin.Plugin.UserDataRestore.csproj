@@ -1,26 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- One source tree, two artifacts (DESIGN §11). The 10.11.11 probe in
-         evidence/ needed a patch file to retarget; multi-targeting removes that
-         step, and the compiler checks both ABIs on every build. -->
-    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Jellyfin.Plugin.UserDataRestore</AssemblyName>
     <RootNamespace>Jellyfin.Plugin.UserDataRestore</RootNamespace>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <!-- Which server each build is for. JellyfinRuntimeVersion is what the plugin
-       checks IApplicationHost.ApplicationVersion against before it opens a
-       database context; §17.3 showed targetAbi is only a minimum-version filter,
-       so a 10.11-targeted build otherwise loads happily on 12.0. -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <JellyfinPackageVersion>10.11.11</JellyfinPackageVersion>
-    <JellyfinRuntimeVersion>10.11.11</JellyfinRuntimeVersion>
-    <JellyfinTargetAbi>10.11.11.0</JellyfinTargetAbi>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+  <!-- Which server this build is for (DESIGN §11). JellyfinRuntimeVersion is
+       what the plugin checks IApplicationHost.ApplicationVersion against before
+       it opens a database context; §17.3 showed targetAbi is only a
+       minimum-version filter, so this build otherwise loads happily on any newer
+       server. -->
+  <PropertyGroup>
     <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
     <!-- Package and runtime version now agree. They did not under RC5, which
          also reported itself as 12.0.0 with no prerelease tag in

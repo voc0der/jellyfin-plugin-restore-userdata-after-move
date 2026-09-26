@@ -7,9 +7,9 @@ namespace Jellyfin.Plugin.UserDataRestore.Jellyfin;
 /// </summary>
 /// <remarks>
 /// <para>Not optional and not belt-and-braces. §17.3 established that Jellyfin
-/// treats <c>targetAbi</c> as a minimum-version filter: the 10.11.11-targeted
-/// probe loaded on 12.0 RC5, registered its task, ran, and bound to the host's
-/// 12.0 assemblies without a single warning. This plugin depends on database
+/// treats <c>targetAbi</c> as a minimum-version filter: a probe targeted at an
+/// older server loaded on a newer one, registered its task, ran, and bound to the
+/// newer host's assemblies without a single warning. This plugin depends on database
 /// entities and implementation packages, so "it loaded" is not "it is
 /// compatible".</para>
 /// <para><b>How exact this can be.</b> The comparison is on
@@ -46,8 +46,8 @@ public static class ServerVersionGate
             return false;
         }
 
-        // Revision is ignored: Jellyfin reports 10.11.11 as 10.11.11.0, and the
-        // 12.0 RC5 server reports 12.0.0 with no prerelease tag.
+        // Revision is ignored: Jellyfin reports 12.0.0 as 12.0.0.0, and the 12.0
+        // release candidates reported 12.0.0 with no prerelease tag.
         if (running.Major == supported.Major && running.Minor == supported.Minor && running.Build == supported.Build)
         {
             message = string.Empty;

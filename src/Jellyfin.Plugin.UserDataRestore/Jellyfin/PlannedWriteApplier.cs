@@ -269,9 +269,9 @@ internal sealed class PlannedWriteApplier
     /// outcome <see cref="WriteOutcome.Uncertain"/>, which stops the batch: the
     /// item holds state this run cannot account for.</para>
     /// <para>A key with no row at all is reported and does not. Jellyfin fans a
-    /// save across every key the item reports, and both supported lines do so in
-    /// one transaction, so a narrower fan-out is not a failed write — it is a
-    /// write that will be harder to find after the <i>next</i> move. That is worth
+    /// save across every key the item reports, and does so in one transaction,
+    /// so a narrower fan-out is not a failed write — it is a write that will be
+    /// harder to find after the <i>next</i> move. That is worth
     /// an operator's attention and not worth abandoning the remaining restores
     /// for, and the distinction is the difference between "this did not work" and
     /// "this worked less well than expected".</para>

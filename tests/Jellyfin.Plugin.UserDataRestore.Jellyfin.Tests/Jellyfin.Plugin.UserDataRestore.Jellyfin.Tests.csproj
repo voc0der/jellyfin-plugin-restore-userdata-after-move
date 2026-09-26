@@ -1,17 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- The 10.11.11 line, and one line rather than both. These tests are about
-         this plugin's own adapter code against real Jellyfin entity types; the
-         version gate and the packaging split are what cover the two ABIs, and
-         running the same assertions twice would mostly prove the test project
-         builds twice.
-
-         10.11.11 rather than 12.0 because a Jellyfin reference drags in the
-         ASP.NET Core shared runtime, and a test suite that only runs where the
-         very latest one happens to be installed is a test suite that stops being
-         run. Every field measurement in evidence/ was taken on this line too. -->
-    <TargetFramework>net9.0</TargetFramework>
+    <!-- These tests are about this plugin's own adapter code against real
+         Jellyfin entity types. A Jellyfin reference drags in the ASP.NET Core
+         shared runtime, so running them needs the ASP.NET Core 10 runtime
+         installed, not just the .NET 10 one. -->
+    <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -29,13 +23,13 @@
        normally: without the runtime assets there is no BaseItem to construct
        and nothing to test against. -->
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
-    <PackageReference Include="Jellyfin.Database.Implementations" Version="10.11.11" />
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="12.0.0" />
 
     <!-- The write path talks to the database as well as to the managers, so the
-         faults worth injecting into it are database faults. Pinned to what
-         10.11.11 itself ships. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.20" />
+         faults worth injecting into it are database faults. Kept in step with the
+         database project's provider pin. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
 
     <!-- Pinned past the native SQLite build EF's own dependency drags in, which
          carries a high-severity advisory. The sibling database project has
