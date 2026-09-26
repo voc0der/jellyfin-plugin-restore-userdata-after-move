@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds one installable archive per supported Jellyfin server line
-# (DESIGN §11). Each archive holds only this plugin's own assemblies plus
+# Builds the installable archive for the supported Jellyfin server
+# (DESIGN §11). The archive holds only this plugin's own assemblies plus
 # meta.json; host assemblies are compile-time references and must not ship.
 #
 # VERSION may be overridden by CI: VERSION=1.0.0.7 ./build.sh
@@ -18,10 +18,9 @@ OUT="artifacts"
 # The archive is named for the package it was built against, not the version the
 # server reports. That mattered most under RC5, which reported itself as 12.0.0
 # exactly like stable does, with nothing in the assemblies to tell them apart --
-# the file name was the only place the distinction survived. Now that the 12
+# the file name was the only place the distinction survived. Now that the
 # build is against stable the two agree, and the convention still holds.
 TARGETS=(
-    "net9.0:10.11.11:10.11.11.0"
     "net10.0:12.0.0:12.0.0.0"
 )
 
@@ -34,7 +33,6 @@ dotnet test tests/Jellyfin.Plugin.UserDataRestore.Core.Tests/Jellyfin.Plugin.Use
 dotnet test tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests/Jellyfin.Plugin.UserDataRestore.Jellyfin.Tests.csproj \
     --nologo -v q
 
-# Both server lines' providers, which is why this one multi-targets.
 dotnet test tests/Jellyfin.Plugin.UserDataRestore.Database.Tests/Jellyfin.Plugin.UserDataRestore.Database.Tests.csproj \
     --nologo -v q
 

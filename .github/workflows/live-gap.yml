@@ -38,11 +38,11 @@ on:
       - 'Directory.Build.props'
       - '.github/workflows/live-gap.yml'
 
-  # Weekly, and not for the usual reason. Both server versions are pinned to
-  # exact tarballs and the code under test is whatever the commit says, so a
+  # Weekly, and not for the usual reason. The server is pinned to an exact
+  # tarball and the code under test is whatever the commit says, so a
   # scheduled run over an unchanged repository re-tests identical inputs and can
   # only ever agree with itself. What it actually watches is the harness's own
-  # footing: repo.jellyfin.org still serving those two files, the runner image
+  # footing: repo.jellyfin.org still serving that file, the runner image
   # still carrying the tools gap.sh needs, a new image still able to run a
   # Jellyfin built against an older glibc. Those drift without anybody
   # committing anything, and they take the live proof down with them.
@@ -70,20 +70,22 @@ jobs:
   prove:
     runs-on: ubuntu-latest
 
-    # A matrix rather than one `gap.sh` with no arguments, which would run both
-    # lines in a single process. That stops at the first failure, so a break in
-    # 10.11.11 would leave 12.0 untested and the report would say nothing about
-    # the half that might be fine. One job per line: both always run, both get
-    # their own log, and the two finish in the time of the slower one.
+    # A matrix rather than one `gap.sh` with no arguments, which would run every
+    # line in a single process. That stops at the first failure, so a break in
+    # one line would leave the next untested and the report would say nothing
+    # about the part that might be fine. One job per line: all always run, each
+    # gets its own log, and they finish in the time of the slowest one. One line
+    # today; the matrix is kept so the next Jellyfin release is a one-word change,
+    # and check-live-matrix.py holds it to what gap.sh supports.
     strategy:
       fail-fast: false
       matrix:
-        line: [ '10.11.11', '12.0' ]
+        line: [ '12.0' ]
 
-    # Both lines and the build take 16m35s on a developer machine, and a job here
-    # runs one of them. The rest is headroom for a slower runner and a cold
-    # 110MB download -- generous on purpose, since the thing this bounds is a
-    # server that hung, and the alternative to a bound is six hours of one.
+    # One line takes around 10-11 minutes on a GitHub runner, build included.
+    # The rest is headroom for a slower runner and a cold 110MB download --
+    # generous on purpose, since the thing this bounds is a server that hung,
+    # and the alternative to a bound is six hours of one.
     timeout-minutes: 45
 
     steps:
@@ -92,9 +94,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: |
-          9.0.x
-          10.0.x
+        dotnet-version: 10.0.x
 
     # Everything else gap.sh needs is already on the image -- jq, sqlite3, curl,
     # tar, unzip, zip, python3 -- and ffmpeg is not. It is not optional here:

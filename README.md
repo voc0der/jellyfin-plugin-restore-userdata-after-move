@@ -30,20 +30,18 @@ A Jellyfin plugin that restores watch state lost when media files move. Jellyfin
 
 ## Installation
 
-Requires Jellyfin 10.11.11. Add this repository under **Dashboard > Plugins > Repositories**, install **Restore User Data After Move** from the catalog, and restart.
+Requires Jellyfin 12.0.0. Add this repository under **Dashboard > Plugins > Repositories**, install **Restore User Data After Move** from the catalog, and restart.
 
 ```
-https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/manifest.json
+https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/manifest-jellyfin-12.json
 ```
-
-On Jellyfin 12.0, use [JELLYFIN-12.md](JELLYFIN-12.md) instead.
 
 > [!NOTE]
 > Full repository of this author's plugins: [voc0der/jellyfin-plugins](https://github.com/voc0der/jellyfin-plugins).
 
 ### Manual
 
-1. Download the ZIP for your server from the [releases page](https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases)
+1. Download the ZIP from the [releases page](https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases)
 2. Extract it into `<jellyfin-data>/plugins/`
 3. Restart Jellyfin
 
@@ -53,7 +51,7 @@ On Jellyfin 12.0, use [JELLYFIN-12.md](JELLYFIN-12.md) instead.
 ./build.sh
 ```
 
-Runs the tests and writes one archive per server version to `artifacts/`.
+Runs the tests and writes the plugin archive to `artifacts/`.
 
 ## Configuration
 
@@ -62,6 +60,8 @@ Runs the tests and writes one archive per server version to `artifacts/`.
 **Dashboard > Scheduled Tasks > Restore user data after move**: the task ships with no schedule, since it is only useful once your files have finished moving and the library has been rescanned. Add a trigger timed to land after both; daily at 3 AM is a reasonable default. That page also runs it by hand and reports the results.
 
 Leave it on a recurring schedule rather than running it once. When a moved item is not yet identified, its rows strand and Jellyfin never retries; each run picks them up as soon as the provider IDs arrive.
+
+If an NFO is added after an item was scanned, use **Refresh metadata** on that item so Jellyfin picks up its provider IDs before the next restore run. A library scan alone may not read the new NFO.
 
 Each run writes a plan and a per-write ledger to `<jellyfin-data>/plugins/Jellyfin.Plugin.UserDataRestore/plans/`.
 

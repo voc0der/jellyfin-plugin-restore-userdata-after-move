@@ -13,8 +13,8 @@ the stranded rows survive the round trip, and whether the outcome the plan
 claims for a write is true of the database. This script finds out.
 
 ```sh
-scripts/gap/gap.sh                    # both server lines
-scripts/gap/gap.sh 10.11.11           # one
+scripts/gap/gap.sh                    # every supported server line
+scripts/gap/gap.sh 12.0               # one
 scripts/gap/gap.sh --keep 12.0        # keep the scratch tree afterwards
 ```
 
@@ -90,19 +90,20 @@ library that was never broken proves nothing.
 Here, and in CI on every push to `main`, every pull request that touches
 behaviour, and once a week — `.github/workflows/live-gap.yml`.
 
-That last one is not the usual drift check. Both servers are pinned to exact
-tarballs and the code under test is whatever the commit says, so a weekly run
+That last one is not the usual drift check. The server is pinned to an exact
+tarball and the code under test is whatever the commit says, so a weekly run
 over an unchanged repository re-tests identical inputs and can only agree with
 itself. What it watches is this script's own footing: `repo.jellyfin.org` still
-serving those two files, the runner image still carrying the tools below, a new
+serving that file, the runner image still carrying the tools below, a new
 image still able to run a Jellyfin built against an older glibc. Those move
 without anybody committing anything, and they take the live proof down with them.
 
-CI runs one job per server line rather than one run covering both, because this
-script stops at the first failed assertion and a break in 10.11.11 would
-otherwise leave 12.0 untested. A failing job uploads the server log, every plan
-file, the plugin's saved configuration and the database as an artifact, which is
-the same evidence `--keep` leaves behind locally.
+CI runs one job per server line rather than one run covering all of them,
+because this script stops at the first failed assertion and a break in one line
+would otherwise leave the next untested. There is one line today, 12.0. A
+failing job uploads the server log, every plan file, the plugin's saved
+configuration and the database as an artifact, which is the same evidence
+`--keep` leaves behind locally.
 
 If you add a server line here, add it to that workflow's matrix too.
 `.github/workflows/check-live-matrix.py` fails the lint run if you don't — a line

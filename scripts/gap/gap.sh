@@ -8,8 +8,8 @@
 # machine's real server: it downloads its own, pins its own port, and keeps every
 # byte it writes inside one scratch directory.
 #
-#   scripts/gap/gap.sh                 both server lines
-#   scripts/gap/gap.sh 10.11.11        one line
+#   scripts/gap/gap.sh                 every supported server line
+#   scripts/gap/gap.sh 12.0            one line
 #   scripts/gap/gap.sh --keep 12.0     keep the scratch tree for inspection
 #
 # Exit status is the result: 0 means every assertion held.
@@ -34,7 +34,6 @@ PORT_BASE=""
 SERVER_LINES=()
 
 # framework:package-version:tarball-url-path:default-port
-readonly LINE_10="net9.0|10.11.11|stable/v10.11.11/amd64/jellyfin_10.11.11-amd64.tar.gz|18096"
 readonly LINE_12="net10.0|12.0.0|stable/v12.0/amd64/jellyfin_12.0-amd64.tar.gz|18098"
 
 # The libraries this harness creates, filled in once the server has assigned
@@ -53,14 +52,13 @@ while [ $# -gt 0 ]; do
         --scratch) SCRATCH_ROOT="$2"; shift ;;
         --port) PORT_BASE="$2"; shift ;;
         --cache) CACHE="$2"; shift ;;
-        10.11.11|12.0) SERVER_LINES+=("$1") ;;
-        both) SERVER_LINES=(10.11.11 12.0) ;;
+        12.0) SERVER_LINES+=("$1") ;;
         -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
     shift
 done
-[ ${#SERVER_LINES[@]} -gt 0 ] || SERVER_LINES=(10.11.11 12.0)
+[ ${#SERVER_LINES[@]} -gt 0 ] || SERVER_LINES=(12.0)
 
 # ---------------------------------------------------------------------------
 # Output
@@ -151,7 +149,7 @@ done
 # ---------------------------------------------------------------------------
 
 # Jellyfin 12.0 rejects X-Emby-Token and ?api_key=, so everything goes
-# through the Authorization header, which both lines accept.
+# through the Authorization header.
 auth_header() {
     if [ -n "${TOKEN:-}" ]; then
         printf 'Authorization: MediaBrowser Client="gap", Device="harness", DeviceId="gap-harness", Version="1.0.0", Token="%s"' "$TOKEN"
@@ -578,12 +576,12 @@ scan_library() {
     run_task "$id" "library scan"
 }
 
-# 10.11 picked up an NFO that appeared beside an item it had already scanned: a
-# library scan was enough. 12.0 does not. A scan there identifies what it is
-# seeing for the first time and leaves the metadata of items it already knows
-# alone, so the NFO sits on disk unread and the item stays unidentified. Asking
-# for that item's metadata directly is what the server's own "Refresh metadata"
-# does, it needs no network, and it behaves the same on both lines.
+# 12.0 does not pick up an NFO that appears beside an item it has already
+# scanned. A library scan identifies what it is seeing for the first time and
+# leaves the metadata of items it already knows alone, so the NFO sits on disk
+# unread and the item stays unidentified. Asking for that item's metadata
+# directly is what the server's own "Refresh metadata" does, and it needs no
+# network.
 refresh_item_metadata() {
     api_ok POST "/Items/$1/Refresh?metadataRefreshMode=FullRefresh&replaceAllMetadata=false" >/dev/null
 }
@@ -1161,7 +1159,6 @@ run_line() {
     LINE=$1
     local spec
     case "$LINE" in
-        10.11.11) spec=$LINE_10 ;;
         12.0) spec=$LINE_12 ;;
         # An unmatched arm used to leave $spec unset and let `set -u` abort on
         # the read below with a message about a variable nobody had heard of.
