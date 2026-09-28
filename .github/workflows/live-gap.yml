@@ -20,9 +20,9 @@ name: Live server proof
 # is host interaction is the wrong thing to leave to memory.
 
 on:
-  # Every push, no path filter, because every push to main cuts a release: if a
-  # commit is going out to people's servers, the claim that it works on one
-  # should be no older than that commit.
+  # Every push, no path filter, because everything on main goes out with the
+  # next release: if a commit is going out to people's servers, the claim that
+  # it works on one should be no older than that commit.
   push:
     branches: [ main ]
 

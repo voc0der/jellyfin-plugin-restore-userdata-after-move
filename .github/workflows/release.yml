@@ -8,17 +8,18 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read  # the release label is read off the merged pull request
 
 # One release at a time. Two pushes landing together each derive their version
 # from the same latest tag, and `gh release create` tags whatever main points at
 # when it runs rather than the commit that was built - which shipped a 1.0.0.4
 # whose archives predated the tag they were attached to. Queued, not cancelled:
-# every commit on main still gets its own release.
+# every labelled merge still gets its own release.
 #
 # All three keys are load-bearing. `cancel-in-progress: false` protects only the
 # run that is *executing*; the pending slot defaults to `queue: single`, which
 # cancels the waiting run to make room for a newer one. Under three quick merges
-# that silently drops the middle commit's release - not the workflow's stated
+# that silently drops the middle merge's release - not the workflow's stated
 # invariant, and invisible afterwards, because the run that vanished is the one
 # nobody goes looking for. `queue: max` holds up to 100 pending runs instead.
 concurrency:
@@ -46,8 +47,42 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    - name: Generate version and changelog
+    # Landing on main does not release by itself: only a merged pull request that
+    # carries the `release` label does. Anything else - an unlabelled merge, a
+    # direct push - is built above and stops here, and its changes go out with the
+    # next labelled merge.
+    - name: Check for the release label
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      id: gate
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # The pull request whose merge produced this commit. GitHub can take a
+        # moment to associate a fresh merge commit with its pull request, so an
+        # empty answer is retried before it is believed.
+        pr=""
+        for delay in 0 5 10 20; do
+          sleep "$delay"
+          pr=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq 'map(select(.merge_commit_sha == "${{ github.sha }}")) | first // empty')
+          if [ -n "$pr" ]; then
+            break
+          fi
+        done
+
+        if [ -z "$pr" ]; then
+          echo "No merged pull request produced ${{ github.sha }}; not releasing."
+          echo "release=false" >> "$GITHUB_OUTPUT"
+        elif jq -e 'any(.labels[]; .name == "release")' <<< "$pr" > /dev/null; then
+          echo "#$(jq -r .number <<< "$pr") is labelled release; releasing."
+          echo "release=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "#$(jq -r .number <<< "$pr") is not labelled release; not releasing."
+          echo "release=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Generate version and changelog
+      if: steps.gate.outputs.release == 'true'
       id: version
       run: |
         # Get the latest tag, or use 1.0.0.0 if none exists
@@ -88,7 +123,7 @@ jobs:
     # host assembly leaked into the archive or meta.json disagrees with the
     # target version or ABI.
     - name: Build and package
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: steps.gate.outputs.release == 'true'
       run: VERSION="${{ steps.version.outputs.version }}" ./build.sh
 
     - name: Upload artifacts
@@ -106,7 +141,7 @@ jobs:
     # already-existing tag and left 1.0.0.8 published against an archive that was
     # never uploaded. Failing here instead leaves the catalogue exactly as it was.
     - name: Create Release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: steps.gate.outputs.release == 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -139,7 +174,7 @@ jobs:
     # promise a byte-exact checksum for one of these URLs, so fetch them back and
     # prove the promise before making it.
     - name: Verify the published archives
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: steps.gate.outputs.release == 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -169,7 +204,7 @@ jobs:
     # offered the 12.0 build as the newest version instead of being left on a
     # 10.11 build the version gate refuses.
     - name: Update the plugin catalogues
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: steps.gate.outputs.release == 'true'
       run: |
         VERSION="${{ steps.version.outputs.version }}"
         TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -239,7 +274,7 @@ jobs:
     # Pushed with GITHUB_TOKEN, which does not retrigger workflows, so this
     # commit cannot start another release run.
     - name: Commit updated manifest
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: steps.gate.outputs.release == 'true'
       run: |
         git config user.name "voc0der"
         git config user.email "contact@netspace.in"
@@ -264,7 +299,7 @@ jobs:
         exit 1
 
     - name: Rebuild centralized plugin repository
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: steps.gate.outputs.release == 'true'
       env:
         GH_TOKEN: ${{ secrets.PLUGIN_REPO_TOKEN }}
       run: |

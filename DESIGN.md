@@ -1287,8 +1287,8 @@ It runs in CI, in `.github/workflows/live-gap.yml`, and that is a load-bearing
 part of it rather than a convenience.  Run by hand, the answer to "does this work
 on a real server" is only ever as current as the last time somebody thought to
 ask, which for a plugin whose entire risk surface is host interaction is the
-wrong thing to leave to memory.  Every push to `main` cuts a release, so every
-push to `main` runs it.
+wrong thing to leave to memory.  Everything on `main` goes out with the next
+release, so every push to `main` runs it.
 
 Two details of that arrangement are deliberate:
 
