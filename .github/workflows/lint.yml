@@ -42,7 +42,7 @@ jobs:
     - name: Run the database tests
       run: dotnet test tests/Jellyfin.Plugin.UserDataRestore.Database.Tests/ --verbosity minimal
 
-    # The release workflow's one-release-per-commit invariant is three settings
+    # The release workflow's one-release-per-labelled-merge invariant is three settings
     # deep and every one of them fails silently: a dropped pending run leaves no
     # release to notice the absence of. Assert them here rather than trust a
     # comment nobody reads while editing the file it sits in.

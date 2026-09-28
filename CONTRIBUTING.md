@@ -86,7 +86,7 @@ python3 .github/workflows/check-live-matrix.py
 ```
 
 The last two guard invariants that fail silently rather than loudly: that every
-commit still gets its own release, and that CI's live proof still covers every
+labelled merge still gets its own release, and that CI's live proof still covers every
 server line the harness supports.
 
 ## Before changing behaviour
@@ -142,6 +142,7 @@ Three properties are load-bearing and worth stating plainly:
 - Keep changes focused and minimal
 - Test against a running Jellyfin instance before submitting
 - Describe what your PR changes and why
+- Merging to `main` does not publish anything by itself. Add the `release` label before merging to cut a new tag and release; unlabelled changes go out with the next labelled merge
 
 ## LLM Disclosure
 

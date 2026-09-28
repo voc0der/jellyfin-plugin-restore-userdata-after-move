@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assert that the release workflow still gives every commit its own release.
+"""Assert that the release workflow still gives every labelled merge its own release.
 
 The invariant is three settings deep and each of them fails quietly:
 
@@ -11,7 +11,7 @@ The invariant is three settings deep and each of them fails quietly:
                       *running* workflow. The pending slot defaults to
                       queue: single, which cancels the waiting run to make room
                       for a newer one - so under three quick merges the middle
-                      commit is silently released by nobody.
+                      merge is silently released by nobody.
 
 None of that is visible after the fact. A cancelled pending run leaves no
 release, and an absent release is exactly what a missing run looks like, so
