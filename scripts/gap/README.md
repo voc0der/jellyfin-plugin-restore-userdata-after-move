@@ -87,16 +87,15 @@ library that was never broken proves nothing.
 
 ## Where it runs
 
-Here, and in CI on every push to `main`, every pull request that touches
-behaviour, and once a week — `.github/workflows/live-gap.yml`.
+Here, and in CI when started by hand from the Actions tab
+(`.github/workflows/live-gap.yml`, **Run workflow**). Pushes, pull requests and
+schedules do not trigger it.
 
-That last one is not the usual drift check. The server is pinned to an exact
-tarball and the code under test is whatever the commit says, so a weekly run
-over an unchanged repository re-tests identical inputs and can only agree with
-itself. What it watches is this script's own footing: `repo.jellyfin.org` still
-serving that file, the runner image still carrying the tools below, a new
-image still able to run a Jellyfin built against an older glibc. Those move
-without anybody committing anything, and they take the live proof down with them.
+Nothing runs it on a schedule, so drift in this script's own footing shows up
+only on the next run: `repo.jellyfin.org` still serving the pinned tarball, the
+runner image still carrying the tools below, a new image still able to run a
+Jellyfin built against an older glibc. Those move without anybody committing
+anything.
 
 CI runs one job per server line rather than one run covering all of them,
 because this script stops at the first failed assertion and a break in one line
