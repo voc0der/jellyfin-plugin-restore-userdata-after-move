@@ -1,6 +1,10 @@
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: ['config:recommended', 'group:allNonMajor'],
+  // Vulnerabilities come from two sources: this repository's Dependabot alerts, and
+  // osv.dev, which also carries advisories that never reach GitHub's database. A fix
+  // flagged by both still arrives as one PR.
+  osvVulnerabilityAlerts: true,
   // evidence/ records what was run against Jellyfin 10.11.11 and must keep saying so.
   // config:recommended gives NuGet an ignore list of its own, so it is set there too.
   // The top-level list also drops config:recommended's tests/ entry, which would hide the
@@ -46,8 +50,8 @@
   packageRules: [
     {
       // Nobody reviews these before they merge, so a compromised publish gets a few days
-      // to be caught and pulled first. Security fixes don't wait: Renovate opens them from
-      // the repository's Dependabot alerts as soon as an alert appears.
+      // to be caught and pulled first. Security fixes don't wait: Renovate opens them as
+      // soon as a Dependabot alert or an osv.dev advisory appears.
       matchUpdateTypes: ['minor', 'patch', 'pin', 'digest'],
       automerge: true,
       minimumReleaseAge: '3 days',
