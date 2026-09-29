@@ -13,11 +13,11 @@
        minimum-version filter, so this build otherwise loads happily on any newer
        server. -->
   <PropertyGroup>
-    <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
+    <JellyfinPackageVersion>12.1.0</JellyfinPackageVersion>
     <!-- Package and runtime version now agree. They did not under RC5, which
          also reported itself as 12.0.0 with no prerelease tag in
          IApplicationHost.ApplicationVersion (see evidence/results). -->
-    <JellyfinRuntimeVersion>12.0.0</JellyfinRuntimeVersion>
+    <JellyfinRuntimeVersion>12.1.0</JellyfinRuntimeVersion>
     <JellyfinTargetAbi>12.0.0.0</JellyfinTargetAbi>
   </PropertyGroup>
 

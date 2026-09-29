@@ -19,7 +19,7 @@
        own dependency. A test that verified translation against some other
        version of the provider would be verifying the wrong thing. -->
   <PropertyGroup>
-    <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
+    <JellyfinPackageVersion>12.1.0</JellyfinPackageVersion>
     <EntityFrameworkVersion>10.0.12</EntityFrameworkVersion>
   </PropertyGroup>
 
