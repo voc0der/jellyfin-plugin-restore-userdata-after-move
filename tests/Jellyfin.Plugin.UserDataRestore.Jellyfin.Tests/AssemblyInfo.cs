@@ -1,4 +1,5 @@
-using Xunit;
+using Xunit.Sdk;
+using Xunit.v3;
 
 // Jellyfin resolves an episode's series through BaseItem.LibraryManager, which is
 // a static on the entity type — process-global state this suite has to write in
@@ -11,4 +12,4 @@ using Xunit;
 // failure to have. The fix is not per-test cleanup — there is no moment between
 // two parallel classes at which either could safely restore the value — but to
 // stop the assembly running them at once.
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+[assembly: Parallelization(Mode = ParallelMode.None)]

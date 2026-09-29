@@ -19,7 +19,7 @@ public class ApplySequenceTests
     [Fact]
     public async Task EveryWriteIsAttemptedWhenNothingGoesWrong()
     {
-        var run = await RunAsync(3, _ => WriteOutcome.Restored);
+        var run = await RunAsync(3, _ => WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal([0, 1, 2], run.Attempted);
         Assert.All(run.Results, result => Assert.Equal(WriteOutcome.Restored, result.Outcome));
@@ -32,7 +32,7 @@ public class ApplySequenceTests
         // A guard declining is the guard working. The regression in the other
         // direction would be a plugin that gives up the moment one target has
         // gained state, which on a rerun is most of them.
-        var run = await RunAsync(3, index => index == 0 ? WriteOutcome.Skipped : WriteOutcome.Restored);
+        var run = await RunAsync(3, index => index == 0 ? WriteOutcome.Skipped : WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal([0, 1, 2], run.Attempted);
         Assert.Equal(
@@ -45,7 +45,7 @@ public class ApplySequenceTests
     [InlineData(WriteOutcome.Failed)]
     public async Task LaterWritesAreNeverAttemptedAfterALostWrite(WriteOutcome outcome)
     {
-        var run = await RunAsync(4, index => index == 1 ? outcome : WriteOutcome.Restored);
+        var run = await RunAsync(4, index => index == 1 ? outcome : WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         // The assertion the invariant is actually about: the third and fourth
         // items were not merely recorded as untouched, they were never handed to
@@ -62,7 +62,7 @@ public class ApplySequenceTests
     [InlineData(WriteOutcome.Failed, "stopped_after_failed")]
     public async Task TheAbandonedWritesSayWhyTheyWereAbandoned(WriteOutcome outcome, string expected)
     {
-        var run = await RunAsync(3, index => index == 0 ? outcome : WriteOutcome.Restored);
+        var run = await RunAsync(3, index => index == 0 ? outcome : WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.All(
             run.Results.Where(result => result.Outcome == WriteOutcome.NotAttempted),
@@ -72,7 +72,7 @@ public class ApplySequenceTests
     [Fact]
     public async Task AFailureOnTheLastWriteLeavesNothingAbandoned()
     {
-        var run = await RunAsync(2, index => index == 1 ? WriteOutcome.Failed : WriteOutcome.Restored);
+        var run = await RunAsync(2, index => index == 1 ? WriteOutcome.Failed : WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal([0, 1], run.Attempted);
         Assert.DoesNotContain(run.Results, result => result.Outcome == WriteOutcome.NotAttempted);
@@ -83,7 +83,7 @@ public class ApplySequenceTests
     {
         // A plan that simply omitted the abandoned writes would read as though the
         // analysis had never planned them.
-        var run = await RunAsync(5, index => index == 0 ? WriteOutcome.Uncertain : WriteOutcome.Restored);
+        var run = await RunAsync(5, index => index == 0 ? WriteOutcome.Uncertain : WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(5, run.Results.Count);
         Assert.Equal(run.Writes, run.Results.Select(result => result.Write));
@@ -104,7 +104,8 @@ public class ApplySequenceTests
 
                 return WriteOutcome.Restored;
             },
-            libraryScanIsRunning: () => scanning);
+            libraryScanIsRunning: () => scanning,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal([0], run.Attempted);
         Assert.Equal(
@@ -118,7 +119,7 @@ public class ApplySequenceTests
     [Fact]
     public async Task AScanAlreadyRunningAttemptsNothing()
     {
-        var run = await RunAsync(2, _ => WriteOutcome.Restored, libraryScanIsRunning: () => true);
+        var run = await RunAsync(2, _ => WriteOutcome.Restored, libraryScanIsRunning: () => true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(run.Attempted);
         Assert.All(run.Results, result => Assert.Equal(WriteOutcome.NotAttempted, result.Outcome));
@@ -187,7 +188,7 @@ public class ApplySequenceTests
         // ones out of the durable record and put the whole record after the last
         // mutation - which is the position the plan is already in, and the reason
         // it is not enough on its own.
-        var run = await RunAsync(4, index => index == 1 ? WriteOutcome.Uncertain : WriteOutcome.Restored);
+        var run = await RunAsync(4, index => index == 1 ? WriteOutcome.Uncertain : WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(run.Results, run.Recorded);
         Assert.Equal(4, run.Recorded.Count);
@@ -218,7 +219,7 @@ public class ApplySequenceTests
     [Fact]
     public async Task AbandonedWritesAreRecordedToo()
     {
-        var run = await RunAsync(3, index => index == 0 ? WriteOutcome.Failed : WriteOutcome.Restored);
+        var run = await RunAsync(3, index => index == 0 ? WriteOutcome.Failed : WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             [WriteOutcome.Failed, WriteOutcome.NotAttempted, WriteOutcome.NotAttempted],
@@ -228,7 +229,7 @@ public class ApplySequenceTests
     [Fact]
     public async Task ARunThatFinishedWasNotCancelled()
     {
-        var run = await RunAsync(2, _ => WriteOutcome.Restored);
+        var run = await RunAsync(2, _ => WriteOutcome.Restored, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(ApplySequence.WasCancelled(run.Results));
     }
@@ -236,7 +237,7 @@ public class ApplySequenceTests
     [Fact]
     public async Task AbandoningForAScanIsNotReportedAsCancellation()
     {
-        var run = await RunAsync(2, _ => WriteOutcome.Restored, libraryScanIsRunning: () => true);
+        var run = await RunAsync(2, _ => WriteOutcome.Restored, libraryScanIsRunning: () => true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(ApplySequence.WasCancelled(run.Results));
     }

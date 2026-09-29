@@ -6,6 +6,7 @@
          shared runtime, so running them needs the ASP.NET Core 10 runtime
          installed, not just the .NET 10 one. -->
     <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -13,7 +14,9 @@
     <PackageReference Include="coverlet.collector" Version="10.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="NSubstitute" Version="6.2.0" />
-    <PackageReference Include="xunit" Version="2.9.3" />
+    <!-- xunit.v3.mtp-off, not xunit.v3: the plain package turns on Microsoft Testing
+         Platform, which refuses to run under VSTest-mode `dotnet test` on the .NET 10 SDK. -->
+    <PackageReference Include="xunit.v3.mtp-off" Version="4.0.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>
 
