@@ -16,7 +16,6 @@ on:
       - Build and Release
       - CodeQL
       - Lint
-      - Live server proof
     types: [completed]
     branches: ['renovate/**']
   workflow_dispatch:

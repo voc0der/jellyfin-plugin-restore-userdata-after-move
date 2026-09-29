@@ -14,45 +14,12 @@ name: Live server proof
 # model -- its UTC handling among them -- exists only inside a running server.
 # A defect living purely in that layer passes every other suite in this repo.
 #
-# scripts/gap/gap.sh is what reaches it, and until now it reached it only when
-# somebody remembered to run it by hand. That made the answer exactly as current
-# as the last time anybody asked, which for a plugin whose entire risk surface
-# is host interaction is the wrong thing to leave to memory.
+# scripts/gap/gap.sh is what reaches it. This workflow runs it on GitHub's
+# runners, but only when started by hand from the Actions tab: pushes, pull
+# requests and schedules do not trigger it, so its answer is as current as its
+# last run.
 
 on:
-  # Every push, no path filter, because everything on main goes out with the
-  # next release: if a commit is going out to people's servers, the claim that
-  # it works on one should be no older than that commit.
-  push:
-    branches: [ main ]
-
-  # For pull requests the filter is worth having: each line stands up its own
-  # Jellyfin, builds a library, breaks it and rebuilds it, which is too much to
-  # spend on a README edit. These are the paths that change what a server sees.
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'src/**'
-      - 'build.sh'
-      - 'scripts/gap/**'
-      - 'Directory.Build.props'
-      - '.github/workflows/live-gap.yml'
-
-  # Weekly, and not for the usual reason. The server is pinned to an exact
-  # tarball and the code under test is whatever the commit says, so a
-  # scheduled run over an unchanged repository re-tests identical inputs and can
-  # only ever agree with itself. What it actually watches is the harness's own
-  # footing: repo.jellyfin.org still serving that file, the runner image
-  # still carrying the tools gap.sh needs, a new image still able to run a
-  # Jellyfin built against an older glibc. Those drift without anybody
-  # committing anything, and they take the live proof down with them.
-  #
-  # Worth knowing: GitHub disables scheduled workflows after 60 days without
-  # repository activity, and says so only by email. If this stops appearing,
-  # that is the first thing to check.
-  schedule:
-    - cron: '41 4 * * 2'
-
   workflow_dispatch:
 
 permissions:

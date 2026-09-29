@@ -1073,8 +1073,8 @@ distinguish two builds that share a model, and does not claim to.
 
 The recorded analyzer alpha ([`evidence/alpha/`](evidence/alpha/)) ran on RC5 on
 2026-08-12 and has not been re-run on stable 12.0.0.  What covers the stable
-build is the live proof in §12.3, which runs against the stable 12.0 server on
-every push.
+build is the live proof in §12.3, which runs against the stable 12.0 server when
+started by hand.
 
 **Two catalogues, one build.**  `manifest-jellyfin-12.json` is the catalogue the
 README points at and the one the centralized plugin repository reads.
@@ -1283,12 +1283,10 @@ the way an operator's mover moves them, runs the scheduled task, and asserts wha
 this document claims — reading the database only in windows where the server is
 stopped, for the reason recorded in `scripts/gap/README.md`.
 
-It runs in CI, in `.github/workflows/live-gap.yml`, and that is a load-bearing
-part of it rather than a convenience.  Run by hand, the answer to "does this work
-on a real server" is only ever as current as the last time somebody thought to
-ask, which for a plugin whose entire risk surface is host interaction is the
-wrong thing to leave to memory.  Everything on `main` goes out with the next
-release, so every push to `main` runs it.
+It runs in CI, in `.github/workflows/live-gap.yml`, but only when started by hand
+from the Actions tab; pushes, pull requests and schedules do not trigger it.  The
+answer to "does this work on a real server" is therefore only as current as its
+last run.
 
 Two details of that arrangement are deliberate:
 
