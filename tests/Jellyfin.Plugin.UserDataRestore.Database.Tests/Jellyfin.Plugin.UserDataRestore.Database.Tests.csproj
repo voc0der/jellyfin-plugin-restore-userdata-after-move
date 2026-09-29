@@ -12,6 +12,7 @@
          stays runnable on a machine that has the .NET 10 runtime without the
          ASP.NET Core 10 one. -->
     <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -30,7 +31,9 @@
          compiled into both, so a version here that differs from the one there
          means the same source is built against two NSubstitute versions. -->
     <PackageReference Include="NSubstitute" Version="6.2.0" />
-    <PackageReference Include="xunit" Version="2.9.3" />
+    <!-- xunit.v3.mtp-off, not xunit.v3: the plain package turns on Microsoft Testing
+         Platform, which refuses to run under VSTest-mode `dotnet test` on the .NET 10 SDK. -->
+    <PackageReference Include="xunit.v3.mtp-off" Version="4.0.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>
 
