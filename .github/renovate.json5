@@ -1,0 +1,70 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended', 'group:allNonMajor'],
+  // evidence/ records what was run against Jellyfin 10.11.11 and must keep saying so.
+  // config:recommended gives NuGet an ignore list of its own, so it is set there too.
+  // The top-level list also drops config:recommended's tests/ entry, which would hide the
+  // database tests' version properties from the regex managers below.
+  ignorePaths: ['**/node_modules/**', 'evidence/**'],
+  nuget: {
+    ignorePaths: ['**/node_modules/**', 'evidence/**'],
+  },
+  // The Jellyfin and EF Core versions are set by properties, and Renovate's NuGet manager
+  // skips a version given by a property, so the properties themselves are tracked. They
+  // are read as semver, since NuGet treats a bare version as a minimum and would count
+  // 12.1.0 as already satisfying 12.0.0. JellyfinRuntimeVersion moves with
+  // JellyfinPackageVersion, since the runtime gate refuses any server that is not the one
+  // the plugin was built against.
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/\\.csproj$/'],
+      matchStrings: [
+        '<JellyfinPackageVersion>(?<currentValue>[^<]+)</JellyfinPackageVersion>',
+        '<JellyfinRuntimeVersion>(?<currentValue>[^<]+)</JellyfinRuntimeVersion>',
+      ],
+      depNameTemplate: 'Jellyfin.Controller',
+      datasourceTemplate: 'nuget',
+      versioningTemplate: 'semver',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/\\.csproj$/'],
+      matchStrings: ['<EntityFrameworkVersion>(?<currentValue>[^<]+)</EntityFrameworkVersion>'],
+      depNameTemplate: 'Microsoft.EntityFrameworkCore.Sqlite',
+      datasourceTemplate: 'nuget',
+      versioningTemplate: 'semver',
+    },
+  ],
+  // main has no branch protection, so GitHub's auto-merge is unavailable. Renovate merges
+  // on its own next run, and only once every check on the PR has passed.
+  platformAutomerge: false,
+  // Majors wait on the Dependency Dashboard issue until approved there.
+  major: {
+    dependencyDashboardApproval: true,
+  },
+  packageRules: [
+    {
+      // Nobody reviews these before they merge, so a compromised publish gets a few days
+      // to be caught and pulled first. Security fixes still come from Dependabot, which
+      // does not wait.
+      matchUpdateTypes: ['minor', 'patch', 'pin', 'digest'],
+      automerge: true,
+      minimumReleaseAge: '3 days',
+    },
+    {
+      // The Jellyfin packages must match each other, so they share one PR, and it never
+      // merges unattended. A bump here is never routine: the package version is pinned to
+      // one server version in the plugin csproj, it is what the runtime version gate
+      // enforces, and DESIGN §11 requires the integration suite to pass against a version
+      // before it is claimed. Treat the PR as "a new server version is available", not as
+      // a dependency update. The PR moves the csproj properties only: build.sh,
+      // scripts/gap/gap.sh and release.yml name the server too, and are updated by hand in
+      // the same PR. The EF Core provider is pinned to what the server ships, so it moves
+      // with Jellyfin rather than on its own.
+      matchPackageNames: ['Jellyfin.*', 'Microsoft.EntityFrameworkCore.Sqlite'],
+      groupName: 'Jellyfin packages',
+      automerge: false,
+    },
+  ],
+}
