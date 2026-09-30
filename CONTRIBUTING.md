@@ -146,5 +146,5 @@ Three properties are load-bearing and worth stating plainly:
 
 ## LLM Disclosure
 
-This project uses LLM-assisted development (Claude). Contributions generated with
+This project uses LLM-assisted development. Contributions generated with
 AI assistance are welcome, but please review and test all code before submitting.
