@@ -14,7 +14,7 @@ public static class BuildInfo
 {
     private static readonly Assembly Self = typeof(BuildInfo).Assembly;
 
-    /// <summary>Gets the exact Jellyfin version this build supports at runtime.</summary>
+    /// <summary>Gets the Jellyfin version this build was made for, as recorded in each plan.</summary>
     public static string JellyfinRuntimeVersion { get; } = Read("JellyfinRuntimeVersion");
 
     /// <summary>Gets the Jellyfin NuGet package version this build compiled against.</summary>

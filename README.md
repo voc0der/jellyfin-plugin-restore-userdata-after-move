@@ -33,7 +33,7 @@ A Jellyfin plugin that restores watch state lost when media files move. Jellyfin
 
 ## Installation
 
-Requires Jellyfin 12.0.0. Add this repository under **Dashboard > Plugins > Repositories**, install **Restore User Data After Move** from the catalog, and restart.
+Requires Jellyfin 12.0.0 or later. Add this repository under **Dashboard > Plugins > Repositories**, install **Restore User Data After Move** from the catalog, and restart.
 
 ```
 https://raw.githubusercontent.com/voc0der/jellyfin-plugin-restore-userdata-after-move/main/manifest-jellyfin-12.json

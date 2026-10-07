@@ -7,11 +7,12 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <!-- Which server this build is for (DESIGN §11). JellyfinRuntimeVersion is
-       what the plugin checks IApplicationHost.ApplicationVersion against before
-       it opens a database context; §17.3 showed targetAbi is only a
-       minimum-version filter, so this build otherwise loads happily on any newer
-       server. -->
+  <!-- Which server this build is for (DESIGN §11). JellyfinTargetAbi is the
+       oldest server it runs on, and like every plugin it runs on anything newer
+       (§17.3); DatabaseModelGate refuses a server whose UserData model lacks a
+       column this build reads. Raise the ABI whenever the package version moves,
+       or older servers are offered a build compiled against APIs they lack.
+       JellyfinRuntimeVersion is recorded in each plan as targetJellyfinVersion. -->
   <PropertyGroup>
     <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
     <!-- Package and runtime version now agree. They did not under RC5, which

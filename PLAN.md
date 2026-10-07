@@ -257,7 +257,7 @@ passes.
 | No fuzzy title/year/path matching; no parsing numeric keys as TMDb | §15 |
 | No merging into existing non-empty user state | §4.3, §15 |
 | ~~Two tasks, both untriggered; apply requires a one-time expiring arm~~ **Reversed:** one task, no arm. Repeat runs are no-ops because a cleared target reads as `current_state_conflict` and a recovered one as `already_applied`. Still untriggered by default, but for scheduling reasons rather than safety ones: Jellyfin cannot chain a task to the scan that must precede it | §5.2 |
-| Per-version builds with an exact runtime check | §11, §17.3 |
+| ~~Per-version builds with an exact runtime check~~ **Reversed:** one build that runs on any server at or above its `targetAbi`, like every other plugin. The exact check refused 12.1 and 12.2 (#65); `DatabaseModelGate` still refuses a server whose `UserData` model lacks a column the plugin reads | §11, §17.3 |
 | Name states the trigger and an outcome, never a mechanism | §5 |
 
 ---

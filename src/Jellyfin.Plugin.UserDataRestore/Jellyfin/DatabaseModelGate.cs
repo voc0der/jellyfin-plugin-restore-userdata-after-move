@@ -10,17 +10,13 @@ namespace Jellyfin.Plugin.UserDataRestore.Jellyfin;
 /// was written against (DESIGN §9.1 item 2, §11).
 /// </summary>
 /// <remarks>
-/// <para>This exists because the version check cannot be as exact as DESIGN §11
-/// wants. Jellyfin's assemblies carry no prerelease marker: 12.0 RC5 reports
-/// <c>12.0.0</c> in its assembly version, file version, and informational version,
-/// identically to RC4 and to whatever stable 12.0.0 becomes. There is no build
-/// identity to gate on, so "exact version" can only ever mean "exact
-/// <c>major.minor.build</c>" on that line.</para>
-/// <para>What the version was standing in for is compatibility of the entity this
-/// plugin reads. So check that directly: ask the host's own EF model whether every
-/// column the projection depends on is still there. A 12.0.x that reshaped
-/// <c>UserData</c> is refused whatever it calls itself, and a prerelease that did
-/// not is allowed — which is the honest reading of the requirement.</para>
+/// <para>This is the only runtime compatibility check. Like every plugin, this
+/// build runs on any server at or above its <c>targetAbi</c> (DESIGN §17.3), and
+/// a server's version number says nothing reliable about the entity this plugin
+/// reads (12.0 RC5 reported <c>12.0.0</c> exactly as stable does). So check the
+/// entity directly: ask the host's own EF model whether every column the
+/// projection depends on is still there. A server that reshaped <c>UserData</c> is
+/// refused whatever it calls itself, and one that did not is allowed.</para>
 /// <para>This is a compatibility check, not an authenticity check. It cannot tell
 /// two builds apart when they share a model, and it does not try to.</para>
 /// </remarks>

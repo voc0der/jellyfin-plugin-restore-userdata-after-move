@@ -17,8 +17,8 @@
   // skips a version given by a property, so the properties themselves are tracked. They
   // are read as semver, since NuGet treats a bare version as a minimum and would count
   // 12.1.0 as already satisfying 12.0.0. JellyfinRuntimeVersion moves with
-  // JellyfinPackageVersion, since the runtime gate refuses any server that is not the one
-  // the plugin was built against.
+  // JellyfinPackageVersion, since each plan records it as the server this build was made
+  // for.
   customManagers: [
     {
       customType: 'regex',
@@ -58,14 +58,13 @@
     },
     {
       // The Jellyfin packages must match each other, so they share one PR, and it never
-      // merges unattended. A bump here is never routine: the package version is pinned to
-      // one server version in the plugin csproj, it is what the runtime version gate
-      // enforces, and DESIGN §11 requires the integration suite to pass against a version
-      // before it is claimed. Treat the PR as "a new server version is available", not as
-      // a dependency update. The PR moves the csproj properties only: build.sh,
-      // scripts/gap/gap.sh and release.yml name the server too, and are updated by hand in
-      // the same PR. The EF Core provider is pinned to what the server ships, so it moves
-      // with Jellyfin rather than on its own.
+      // merges unattended. A bump here is never routine: the version compiled against is
+      // the oldest server the plugin can run on, so moving it drops every server older than
+      // the new one. Treat the PR as "raise the minimum server", not as a dependency
+      // update. The PR moves the version properties only: JellyfinTargetAbi in the plugin
+      // csproj, build.sh, scripts/gap/gap.sh and release.yml name the server too, and are
+      // updated by hand in the same PR. The EF Core provider is pinned to what the server
+      // ships, so it moves with Jellyfin rather than on its own.
       matchPackageNames: ['Jellyfin.*', 'Microsoft.EntityFrameworkCore.Sqlite'],
       groupName: 'Jellyfin packages',
       automerge: false,
