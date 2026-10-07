@@ -1037,7 +1037,7 @@ Produce one build artifact, for the supported Jellyfin ABI:
 
 | Target | Framework | Dependency policy |
 |---|---|---|
-| 12.0.0 | .NET 10 | Pin Jellyfin packages to 12.0.0; runtime task permits 12.0.0 only |
+| 12.0.0 and later | .NET 10 | Compile against the 12.0.0 packages; `targetAbi` 12.0.0.0 |
 
 Jellyfin 10.11.11 had a build of its own, on .NET 9, through 1.0.0.28, and is
 not supported after it.  12.0 was first built against RC5 and has been built
@@ -1048,25 +1048,27 @@ Use the official
 packaging pattern.  Host assemblies are compile-time references and must not be
 shipped inside the plugin archive.
 
-The scheduled task performs an exact runtime compatibility check in addition to
-the manifest ABI.  Broaden the accepted version range only after the integration
-suite passes against that version.  Database-entity and manager dependencies
-make optimistic compatibility inappropriate.
+There is no runtime version check.  Like every other plugin, this one runs on any
+server at or above its `targetAbi`.  Through 1.0.0.29 the scheduled task also
+refused any server that did not report exactly the version it was built against,
+so it failed on 12.1 and 12.2
+([#65](https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/issues/65)),
+and the gate was removed.  Moving the package version means raising `targetAbi`
+with it, or older servers are offered a build compiled against APIs they lack.
 
-**How exact that check can be.**  Jellyfin exposes no prerelease or build
-identity: 12.0 RC5 reports `12.0.0` as its assembly version, file version, and
-informational version, indistinguishable from RC4 or from stable 12.0.0
-([§17.12](#1712-analyzer-alpha-on-both-server-lines)).  The runtime check is
-therefore `major.minor.build` and cannot be more.  A build made against a
-prerelease will also load and run on any other server reporting that version, so:
+**The model, not the version.**  A version number could never be exact here:
+Jellyfin exposes no prerelease or build identity, and 12.0 RC5 reports `12.0.0`
+as its assembly version, file version, and informational version,
+indistinguishable from RC4 or from stable 12.0.0
+([§17.12](#1712-analyzer-alpha-on-both-server-lines)).  So:
 
 - the artifact is named for the package it was built against, not for the version
   the server reports, since the file name is the only place the distinction
   survives; and
-- the plugin additionally verifies the host's own EF model — that the `UserData`
-  entity still carries every column the projection reads — which is the
-  compatibility the version number was standing in for.  This is the analyzer-side
-  form of the schema refusal in §9.1 item 2.
+- the plugin verifies the host's own EF model — that the `UserData` entity still
+  carries every column the projection reads — which is the compatibility a
+  version number could only stand in for.  This is the analyzer-side form of the
+  schema refusal in §9.1 item 2.
 
 The model check is a compatibility check, not an authenticity one.  It cannot
 distinguish two builds that share a model, and does not claim to.
@@ -1083,11 +1085,11 @@ entries; every release since is added to both.  Because `targetAbi` is a minimum
 ([§17.3](#173-plugin-abi-enforcement)), a 10.11 server ignores the 12.0 entries
 and keeps offering 1.0.0.28, while a server upgraded to 12.0 that still points
 at `manifest.json` is offered the 12.0 build as the newest version rather than
-being left on a 10.11 build the runtime gate refuses.
+being left on a 10.11 build its own version gate refuses.
 
 The residual is worth stating rather than implying away.  A 12.0 server pointed
 at `manifest.json` still lists the old 10.11 builds, and an operator who picks
-one by hand gets a build that loads and is then refused by the runtime gate,
+one by hand gets a build that loads and is then refused by its own version gate,
 loudly and before the database is touched.  `manifest-jellyfin-12.json` lists
 only 12.0 builds, which is why it is the one the README gives.
 
@@ -1683,7 +1685,7 @@ running into its edges.
 **From Jellyfin 10.11.11.**  1.0.0.28 is the last build for 10.11.11.  A 10.11
 server keeps running it, and `manifest.json` keeps offering it and nothing newer
 (§11).  After upgrading the server to 12.0, update the plugin from the catalogue:
-the 10.11 build loads on 12.0 and the runtime gate refuses to run it.  Either
+the 10.11 build loads on 12.0 and its own version gate refuses to run it.  Either
 repository URL delivers the 12.0 build; `manifest-jellyfin-12.json` is the one to
 use for a new install.
 

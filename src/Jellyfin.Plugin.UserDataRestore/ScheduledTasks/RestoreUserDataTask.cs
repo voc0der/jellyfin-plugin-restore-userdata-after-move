@@ -130,8 +130,6 @@ public class RestoreUserDataTask : IScheduledTask
     {
         ArgumentNullException.ThrowIfNull(progress);
 
-        ServerVersionGate.EnsureSupported(_applicationHost.ApplicationVersion);
-
         // Mid-scan is the worst possible moment to look. Jellyfin removes the
         // vacated items and creates their replacements in separate passes, so a
         // library caught between the two reports stranded rows as unmatchable and
