@@ -25,6 +25,9 @@ public sealed class PlanStore(string directory)
 
     private const string Prefix = "plan-";
     private const string Extension = ".json";
+    private const string TimestampFormat = "yyyyMMdd'T'HHmmss.fffffff'Z'";
+
+    private static readonly string[] TimestampFormats = [TimestampFormat, "yyyyMMdd'T'HHmmss'Z'"];
 
     private readonly string _directory = directory ?? throw new ArgumentNullException(nameof(directory));
 
@@ -79,9 +82,11 @@ public sealed class PlanStore(string directory)
             .EnumerateFiles(_directory, Prefix + "*" + Extension)
             .Select(path => new StoredPlan(path, Path.GetFileName(path), ExtractShortId(Path.GetFileName(path))))
 
-            // File names start with a sortable UTC timestamp, so ordinal order is
-            // chronological order without touching filesystem metadata.
-            .OrderByDescending(stored => stored.FileName, StringComparer.Ordinal)];
+            // Older builds wrote whole seconds. Parse both filename formats so
+            // an old trailing Z cannot outrank a newer fractional timestamp in
+            // the same second. No plan contents or filesystem dates are needed.
+            .OrderByDescending(stored => ExtractTimestamp(stored.FileName))
+            .ThenByDescending(stored => stored.FileName, StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -165,7 +170,9 @@ public sealed class PlanStore(string directory)
     public static string BuildFileName(PlanDocument plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        var timestamp = plan.CreatedUtc.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+        // Keep the full timestamp: two quick runs can share a second, and
+        // sorting that tie by plan hash can delete the run that just finished.
+        var timestamp = plan.CreatedUtc.UtcDateTime.ToString(TimestampFormat, CultureInfo.InvariantCulture);
         return string.Create(CultureInfo.InvariantCulture, $"{Prefix}{timestamp}-{Shorten(plan.PlanId)}{Extension}");
     }
 
@@ -185,5 +192,16 @@ public sealed class PlanStore(string directory)
         var stem = Path.GetFileNameWithoutExtension(fileName);
         var separator = stem.LastIndexOf('-');
         return separator < 0 ? string.Empty : stem[(separator + 1)..];
+    }
+
+    private static DateTime ExtractTimestamp(string fileName)
+    {
+        var separator = fileName.LastIndexOf('-');
+        return separator > Prefix.Length
+            && DateTime.TryParseExact(
+                fileName.AsSpan(Prefix.Length, separator - Prefix.Length), TimestampFormats,
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var timestamp)
+            ? timestamp
+            : DateTime.MinValue;
     }
 }
