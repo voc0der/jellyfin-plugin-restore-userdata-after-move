@@ -244,6 +244,36 @@ public class PlanTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RetentionOrdersPlansWithinTheSameSecondBeforeComparingHashes(bool legacyFileName)
+    {
+        using var directory = new TemporaryDirectory();
+        var store = new PlanStore(directory.Path);
+        var created = new DateTimeOffset(2026, 8, 12, 0, 0, 0, TimeSpan.Zero);
+        // Deliberately reverse the hash order: storage must sort by time, even
+        // when the older plan's ID would otherwise win the filename tie.
+        var template = BuildPlan([Scenario.Row(Scenario.UserA, "tt0133093")], created: created);
+        var older = template with { PlanId = new string('f', 64) };
+        var newer = older with { CreatedUtc = created.AddTicks(1), PlanId = new string('0', 64) };
+        var olderPath = store.Write(older);
+        if (legacyFileName)
+        {
+            var legacyPath = Path.Join(directory.Path, "plan-20260812T000000Z-ffffffffffff.json");
+            if (olderPath != legacyPath)
+            {
+                File.Move(olderPath, legacyPath);
+            }
+        }
+
+        var newerPath = store.Write(newer);
+
+        Assert.Equal(newerPath, store.List()[0].Path);
+        Assert.Equal(1, store.PruneToLatest(1));
+        Assert.Equal(newerPath, Assert.Single(store.List()).Path);
+    }
+
+    [Theory]
     [InlineData(double.NaN, "NaN")]
     [InlineData(double.PositiveInfinity, "Infinity")]
     [InlineData(double.NegativeInfinity, "-Infinity")]
