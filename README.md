@@ -14,6 +14,9 @@
   <a href="https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/tree/main/tests">
     <img src="https://img.shields.io/badge/coverage-94%25-brightgreen" alt="Code coverage percentage" />
   </a>
+  <a href="https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/actions/workflows/codeql.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/voc0der/jellyfin-plugin-restore-userdata-after-move/codeql.yml?branch=main&label=codeql" alt="CodeQL status" />
+  </a>
   <a href="https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/issues">
     <img src="https://img.shields.io/github/issues/voc0der/jellyfin-plugin-restore-userdata-after-move?color=DAA520" alt="Open issues" />
   </a>
