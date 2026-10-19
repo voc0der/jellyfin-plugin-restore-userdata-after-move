@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/since-08%2F12%2F2026-blue" alt="Since badge" />
   <a href="https://github.com/voc0der/jellyfin-plugin-restore-userdata-after-move/releases/latest">
     <img src="https://img.shields.io/github/v/release/voc0der/jellyfin-plugin-restore-userdata-after-move?label=stable%20release" alt="Stable release version" />
   </a>
