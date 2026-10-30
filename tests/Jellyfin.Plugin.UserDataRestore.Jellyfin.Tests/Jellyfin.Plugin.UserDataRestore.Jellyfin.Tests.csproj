@@ -26,13 +26,13 @@
        normally: without the runtime assets there is no BaseItem to construct
        and nothing to test against. -->
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
-    <PackageReference Include="Jellyfin.Database.Implementations" Version="12.0.0" />
+    <PackageReference Include="Jellyfin.Controller" Version="12.4.0" />
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="12.4.0" />
 
     <!-- The write path talks to the database as well as to the managers, so the
          faults worth injecting into it are database faults. Kept in step with the
          database project's provider pin. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
 
     <!-- Pinned past the native SQLite build EF's own dependency drags in, which
          carries a high-severity advisory. The sibling database project has

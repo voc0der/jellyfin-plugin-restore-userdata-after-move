@@ -14,11 +14,11 @@
        or older servers are offered a build compiled against APIs they lack.
        JellyfinRuntimeVersion is recorded in each plan as targetJellyfinVersion. -->
   <PropertyGroup>
-    <JellyfinPackageVersion>12.0.0</JellyfinPackageVersion>
+    <JellyfinPackageVersion>12.4.0</JellyfinPackageVersion>
     <!-- Package and runtime version now agree. They did not under RC5, which
          also reported itself as 12.0.0 with no prerelease tag in
          IApplicationHost.ApplicationVersion (see evidence/results). -->
-    <JellyfinRuntimeVersion>12.0.0</JellyfinRuntimeVersion>
+    <JellyfinRuntimeVersion>12.4.0</JellyfinRuntimeVersion>
     <JellyfinTargetAbi>12.0.0.0</JellyfinTargetAbi>
   </PropertyGroup>
 
